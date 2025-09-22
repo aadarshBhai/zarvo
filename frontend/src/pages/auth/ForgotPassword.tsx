@@ -11,6 +11,7 @@ const ForgotPassword = () => {
     setLoading(true);
 
     try {
+      // Use your backend API URL from env
       const res = await fetch(`${import.meta.env.VITE_API_URL}/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -21,7 +22,7 @@ const ForgotPassword = () => {
       if (!res.ok) throw new Error(data.message || "Failed to send email");
 
       toast({ title: "Email sent!", description: data.message });
-      setEmail("");
+      setEmail(""); // clear input
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
