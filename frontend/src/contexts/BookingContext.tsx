@@ -112,8 +112,10 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [socket, setSocket] = useState<any>(null);
 
-  const API_URL = (import.meta as any).env?.VITE_API_BASE || "http://localhost:5000/api";
-  const SOCKET_URL = (import.meta as any).env?.VITE_SOCKET_URL || "http://localhost:5000";
+  // Prefer Vite-provided envs, otherwise default to current origin so prod builds work without hardcoded localhost
+  const ORIGIN = (typeof window !== "undefined" && window.location?.origin) ? window.location.origin : "http://localhost:5000";
+  const API_URL = (import.meta as any).env?.VITE_API_BASE || `${ORIGIN}/api`;
+  const SOCKET_URL = (import.meta as any).env?.VITE_SOCKET_URL || ORIGIN;
 
   // -------------------- BUSINESS SLOTS --------------------
   const getBusinessSlots = async (): Promise<TimeSlot[]> => {
