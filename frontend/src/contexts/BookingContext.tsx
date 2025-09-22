@@ -113,7 +113,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [socket, setSocket] = useState<any>(null);
 
   // Prefer Vite-provided envs, otherwise default to current origin so prod builds work without hardcoded localhost
-  const ORIGIN = (typeof window !== "undefined" && window.location?.origin) ? window.location.origin : "http://localhost:5000";
+  const ORIGIN = (typeof window !== "undefined" && window.location?.origin) ? window.location.origin : import.meta.env.VITE_API_BASE;
   const API_URL = (import.meta as any).env?.VITE_API_BASE || `${ORIGIN}/api`;
   const SOCKET_URL = (import.meta as any).env?.VITE_SOCKET_URL || ORIGIN;
 

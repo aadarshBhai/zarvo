@@ -30,7 +30,8 @@ export const useAuth = () => {
 };
 
 // Make sure VITE_API_URL ends with /api/auth
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api/auth";
+const API_URL = import.meta.env.VITE_API_BASE + "/auth";
+
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);

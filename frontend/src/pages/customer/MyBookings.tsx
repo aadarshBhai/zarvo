@@ -23,7 +23,7 @@ interface Booking {
 }
 
 const MyBookings: React.FC = () => {
-  const API_URL = "http://localhost:5000/api";
+  const API_URL = import.meta.env.VITE_API_BASE;
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [qrCodes, setQrCodes] = useState<{ [key: string]: string }>({});
 
