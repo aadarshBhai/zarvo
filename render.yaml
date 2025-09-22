@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: zarvo
+    env: node
+    rootDir: .
+    plan: free
+    buildCommand: |
+      npm ci
+      npm run build
+      npm --prefix frontend ci
+      npm --prefix frontend run build
+    startCommand: node backend/dist/server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      # Set your values in Render dashboard or use Sync Secrets. Do not commit secrets.
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URLS
+        value: https://your-frontend-domain
+      - key: SELF_URL
+        value: https://your-service-on-render
