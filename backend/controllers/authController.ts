@@ -88,7 +88,9 @@ export const forgotPassword = async (req: Request, res: Response) => {
       },
     });
 
-    const resetUrl = `${process.env.FRONTEND_URLS}/reset-password/${token}`;
+    const frontendUrl = process.env.FRONTEND_URLS || "http://localhost:5173"; // fallback for local dev
+    const resetUrl = `${frontendUrl}/reset-password/${token}`;
+
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER!,
