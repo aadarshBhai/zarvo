@@ -14,19 +14,9 @@ import slotRoutes from "./routes/slotRoutes";
 import testEmailRoutes from "./routes/testEmail";
 
 // Load environment variables
-const envFiles = [
-  path.resolve(__dirname, "..", ".env"),
-  path.resolve(__dirname, "..", "..", ".env")
-];
+dotenv.config();
 
-for (const file of envFiles) {
-  if (fs.existsSync(file)) {
-    dotenv.config({ path: file });
-    break;
-  }
-}
-
-// Confirm environment
+// Confirm environment variables
 console.log("PORT:", process.env.PORT || 5000);
 console.log("FRONTEND_URLS:", process.env.FRONTEND_URLS || process.env.FRONTEND_URL);
 console.log("DB URI exists?", !!(process.env.MONGO_URI || process.env.MONGODB_URL));
@@ -37,7 +27,7 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-// CORS setup
+// Allowed origins for CORS
 const defaultOrigins = ["http://localhost:5173", "http://localhost:8080"];
 const envOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "")
   .split(",")
@@ -45,35 +35,35 @@ const envOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "")
   .filter(Boolean);
 const allowedOrigins = envOrigins.length ? envOrigins : defaultOrigins;
 
-app.use(cors({ origin: allowedOrigins, credentials: true }));
-app.use(express.json());
-
 // Socket.IO initialization
 initIO(server, allowedOrigins);
 
-// API routes
+// Middleware
+app.use(express.json());
+app.use(cors({ origin: allowedOrigins, credentials: true }));
+
+// API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/slots", slotRoutes);
 app.use("/api/test", testEmailRoutes);
 
-// Health check
+// Health check endpoint
 app.get("/health", (_req, res) => res.send("Server is running ✅"));
 
-// Serve frontend SPA
-const frontendDist = path.resolve(__dirname, "..", "frontend", "dist");
+// Serve frontend
+// Adjust path for Render: backend/dist -> ../../frontend/dist
+const frontendDist = path.resolve(__dirname, "../../frontend/dist");
 if (fs.existsSync(path.join(frontendDist, "index.html"))) {
   console.log("Serving frontend from:", frontendDist);
   app.use(express.static(frontendDist));
 
-  // Catch-all to serve index.html for SPA routes
+  // Catch-all route to serve index.html for SPA
   app.get("*", (_req, res) => {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 } else {
   console.log("Frontend dist not found. Build frontend first.");
-  // Optional: Root API info
-  app.get("/", (_req, res) => res.send("Server is running ✅. API under /api"));
 }
 
 // Self-ping to prevent cold start (optional)
