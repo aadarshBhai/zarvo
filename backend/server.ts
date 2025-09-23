@@ -14,7 +14,8 @@ import slotRoutes from "./routes/slotRoutes";
 import testEmailRoutes from "./routes/testEmail";
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+
 
 // Confirm environment variables
 console.log("PORT:", process.env.PORT || 5000);
