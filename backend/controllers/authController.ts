@@ -88,8 +88,9 @@ export const forgotPassword = async (req: Request, res: Response) => {
       },
     });
 
-    const frontendUrl = process.env.FRONTEND_URLS || "http://localhost:5173"; // fallback for local dev
-    const resetUrl = `${frontendUrl.replace(/\/$/, "")}/reset-password/${token}`;
+const frontendUrl = process.env.FRONTEND_URL; 
+const resetUrl = `${frontendUrl?.replace(/\/$/, "")}/reset-password/${token}`;
+
 
 
 
