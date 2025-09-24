@@ -21,7 +21,8 @@ const Signup = () => {
     password: '',
     confirmPassword: '',
     role: '' as UserRole | '',
-    businessType: ''
+    businessType: '',
+    businessTypeOther: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -31,13 +32,18 @@ const Signup = () => {
     return <Navigate to="/" replace />;
   }
 
+  // Healthcare-focused departments for business (doctor) signup
   const businessTypes = [
-    'Healthcare',
-    'Beauty & Wellness',
-    'Automotive',
-    'Professional Services',
-    'Fitness & Sports',
-    'Education',
+    'General Physician / Medicine',
+    'Pediatrics',
+    'Gynecology & Obstetrics',
+    'Orthopedics',
+    'Dermatology',
+    'Cardiology',
+    'Ophthalmology',
+    'Dentistry',
+    'ENT (Ear, Nose, Throat)',
+    'Psychiatry / Mental Health',
     'Other'
   ];
 
@@ -60,9 +66,15 @@ const Signup = () => {
       return;
     }
 
-    if (formData.role === 'business' && !formData.businessType) {
-      setError('Please select a business type');
-      return;
+    if (formData.role === 'business') {
+      if (!formData.businessType) {
+        setError('Please select a business type');
+        return;
+      }
+      if (formData.businessType === 'Other' && !formData.businessTypeOther.trim()) {
+        setError('Please specify your department');
+        return;
+      }
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -77,7 +89,7 @@ const Signup = () => {
         email: formData.email,
         phone: formData.phone,
         role: formData.role as UserRole,
-        businessType: formData.businessType || undefined,
+        businessType: (formData.businessType === 'Other' ? formData.businessTypeOther.trim() : formData.businessType) || undefined,
         password: formData.password
       });
 
@@ -203,7 +215,7 @@ const Signup = () => {
                   <Label htmlFor="businessType">Business Type *</Label>
                   <div className="relative">
                     <Building className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Select onValueChange={(value) => setFormData({ ...formData, businessType: value })}>
+                    <Select onValueChange={(value) => setFormData({ ...formData, businessType: value, ...(value !== 'Other' ? { businessTypeOther: '' } : {}) })}>
                       <SelectTrigger id="businessType" name="businessType" className="pl-10">
                         <SelectValue placeholder="Select your business type" />
                       </SelectTrigger>
@@ -213,6 +225,19 @@ const Signup = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    {formData.businessType === 'Other' && (
+                      <div className="mt-2">
+                        <Label htmlFor="businessTypeOther">Please specify your department</Label>
+                        <Input
+                          id="businessTypeOther"
+                          name="businessTypeOther"
+                          type="text"
+                          placeholder="Enter your department"
+                          value={formData.businessTypeOther}
+                          onChange={(e) => setFormData({ ...formData, businessTypeOther: e.target.value })}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

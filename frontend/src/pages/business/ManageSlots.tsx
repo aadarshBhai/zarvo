@@ -25,6 +25,7 @@ const ManageSlots = () => {
     time: '',
     duration: 30,
     department: '',
+    departmentOther: '',
     price: 100,
     doctorName: user?.name || '',
     doctorRating: 5,
@@ -70,7 +71,19 @@ const ManageSlots = () => {
     );
   }
 
-  const departments = ['Heart Checkup', 'General Checkup', 'Dental Care', 'Eye Care', 'Dermatology'];
+  const departments = [
+    'General Physician / Medicine',
+    'Pediatrics',
+    'Gynecology & Obstetrics',
+    'Orthopedics',
+    'Dermatology',
+    'Cardiology',
+    'Ophthalmology',
+    'Dentistry',
+    'ENT (Ear, Nose, Throat)',
+    'Psychiatry / Mental Health',
+    'Other'
+  ];
 
   const getDurationOptions = (department: string) => {
     const durations = {
@@ -93,12 +106,23 @@ const ManageSlots = () => {
       return;
     }
 
+    if (newSlot.department === 'Other' && !newSlot.departmentOther.trim()) {
+      toast({
+        title: "Please specify your department",
+        description: "Enter a department when selecting 'Other'.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsCreating(true);
     try {
+      const chosenDepartment = newSlot.department === 'Other' ? newSlot.departmentOther.trim() : newSlot.department;
+
       const doctorPayload = {
         id: user.id || "temp-id",
         name: newSlot.doctorName?.trim() || "Unknown Doctor",
-        specialization: newSlot.department?.trim() || "General",
+        specialization: chosenDepartment || "General",
         rating: typeof newSlot.doctorRating === 'number' ? newSlot.doctorRating : 0,
         location: newSlot.doctorLocation?.trim() || "Unknown Location",
       };
@@ -118,7 +142,7 @@ const ManageSlots = () => {
         date: newSlot.date,
         time: newSlot.time,
         duration: newSlot.duration,
-        department: newSlot.department,
+        department: chosenDepartment,
         price: newSlot.price,
         businessId: user.id || "temp-business-id",
         businessName: user.name || "Unknown Business",
@@ -139,6 +163,7 @@ const ManageSlots = () => {
         time: '',
         duration: 30,
         department: '',
+        departmentOther: '',
         price: 100,
         doctorName: user?.name || '',
         doctorRating: 5,
@@ -226,7 +251,7 @@ const ManageSlots = () => {
                   <Label htmlFor="department">Department *</Label>
                   <Select
                     value={newSlot.department}
-                    onValueChange={(value) => setNewSlot({ ...newSlot, department: value })}
+                    onValueChange={(value) => setNewSlot({ ...newSlot, department: value, ...(value !== 'Other' ? { departmentOther: '' } : {}) })}
                   >
                     <SelectTrigger id="department" name="department">
                       <SelectValue placeholder="Select department" />
@@ -237,6 +262,19 @@ const ManageSlots = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                  {newSlot.department === 'Other' && (
+                    <div className="mt-2">
+                      <Label htmlFor="departmentOther">Please specify department</Label>
+                      <Input
+                        id="departmentOther"
+                        name="departmentOther"
+                        type="text"
+                        placeholder="Enter department"
+                        value={newSlot.departmentOther}
+                        onChange={(e) => setNewSlot({ ...newSlot, departmentOther: e.target.value })}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {newSlot.department && (

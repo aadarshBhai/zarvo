@@ -4,14 +4,19 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 
-// JWT token generator
-const generateToken = (userId: string) =>
-  jwt.sign({ id: userId }, process.env.JWT_SECRET!, { expiresIn: "7d" });
+// JWT token generator (includes role for client-side routing convenience)
+const generateToken = (userId: string, role: string) =>
+  jwt.sign({ id: userId, role }, process.env.JWT_SECRET!, { expiresIn: "7d" });
 
 // ================= SIGNUP =================
 export const signup = async (req: Request, res: Response) => {
   try {
-    const { email } = req.body;
+    const { email, role } = req.body;
+
+    // Prevent creating admin accounts via public signup
+    if (role === 'admin' || role === 'super-admin') {
+      return res.status(403).json({ message: "Admin accounts cannot be created via public signup" });
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -31,7 +36,7 @@ export const signup = async (req: Request, res: Response) => {
         role: user.role,
         businessType: user.businessType,
       },
-      token: generateToken(user._id.toString()),
+      token: generateToken(user._id.toString(), (user as any).role || 'customer'),
     });
   } catch (error) {
     console.error("Signup error:", error);
@@ -79,7 +84,7 @@ export const login = async (req: Request, res: Response) => {
         role: user.role,
         businessType: user.businessType,
       },
-      token: generateToken(user._id.toString()),
+      token: generateToken(user._id.toString(), (user as any).role || 'customer'),
     });
   } catch (error) {
     console.error("Login error:", error);

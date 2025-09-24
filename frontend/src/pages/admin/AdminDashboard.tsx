@@ -11,8 +11,8 @@ const AdminDashboard = () => {
   const { user } = useAuth();
   const { slots, bookings } = useBooking();
 
-  // Redirect if not admin
-  if (!user || user.role !== 'admin') {
+  // Redirect if not admin or super-admin
+  if (!user || (user.role !== 'admin' && user.role !== 'super-admin')) {
     return <Navigate to="/login" replace />;
   }
 

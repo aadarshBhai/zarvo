@@ -44,6 +44,7 @@ const Navbar = () => {
           { label: 'Profile', href: '/profile', icon: User }
         ];
       case 'admin':
+      case 'super-admin':
         return [
           { label: 'Admin Dashboard', href: '/admin-dashboard', icon: BarChart3 },
           { label: 'User Management', href: '/user-management', icon: Users },

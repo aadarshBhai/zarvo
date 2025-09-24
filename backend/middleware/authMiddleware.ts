@@ -23,3 +23,15 @@ export const protect = async (req: Request & { user?: any }, res: Response, next
     res.status(401).json({ message: "No token, authorization denied" });
   }
 };
+
+export const isAdmin = (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+  const role = req.user?.role;
+  if (role === 'admin' || role === 'super-admin') return next();
+  return res.status(403).json({ message: 'Admin access required' });
+};
+
+export const isSuperAdmin = (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+  const role = req.user?.role;
+  if (role === 'super-admin') return next();
+  return res.status(403).json({ message: 'Super-admin access required' });
+};
