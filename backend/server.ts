@@ -28,13 +28,12 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-// Allowed origins for CORS
-const defaultOrigins = ["http://localhost:5173", "http://localhost:8080"];
+// Allowed origins for CORS (production only; configured via env)
 const envOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "")
   .split(",")
   .map(o => o.trim())
   .filter(Boolean);
-const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])]; // Ensure both default and env origins are included
+const allowedOrigins = [...new Set(envOrigins)];
 
 // Socket.IO initialization
 initIO(server, allowedOrigins);

@@ -90,11 +90,12 @@ const Signup = () => {
 
       // Redirect to login page after signup
       navigate('/login');
-    } catch (error) {
-      setError('Failed to create account. Please try again.');
+    } catch (error: any) {
+      const message = error?.message || 'Failed to create account. Please try again.';
+      setError(message);
       toast({
         title: "Signup failed",
-        description: "An error occurred while creating your account.",
+        description: message,
         variant: "destructive",
       });
     }
