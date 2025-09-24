@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { User, Mail, Phone, Building, Calendar, Settings } from 'lucide-react';
+import { User, Mail, Phone, Building, Calendar, Settings, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, deleteAccount } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -32,6 +43,23 @@ const Profile = () => {
       description: "Your profile information has been updated successfully.",
     });
     setIsEditing(false);
+  };
+  
+  const handleDeleteAccount = async () => {
+    try {
+      await deleteAccount();
+      toast({
+        title: "Account deleted",
+        description: "Your account has been permanently deleted.",
+      });
+      // Redirect happens automatically due to logout() in deleteAccount
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete account. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCancel = () => {
@@ -276,13 +304,40 @@ const Profile = () => {
           <CardContent>
             <div className="space-y-4">
               <Button variant="outline" className="w-full justify-start gap-2">
-                <Settings className="h-4 w-4" />
+                <Lock className="h-4 w-4" />
                 Change Password
               </Button>
               <Button variant="outline" className="w-full justify-start gap-2">
                 <Mail className="h-4 w-4" />
                 Update Email Preferences
               </Button>
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full justify-start gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Delete Profile
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete your account
+                      and remove all your data from our servers.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction 
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={handleDeleteAccount}
+                    >
+                      Delete Account
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </CardContent>
         </Card>

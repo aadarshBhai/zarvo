@@ -34,7 +34,7 @@ const envOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "")
   .split(",")
   .map(o => o.trim())
   .filter(Boolean);
-const allowedOrigins = envOrigins.length ? envOrigins : defaultOrigins;
+const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])]; // Ensure both default and env origins are included
 
 // Socket.IO initialization
 initIO(server, allowedOrigins);

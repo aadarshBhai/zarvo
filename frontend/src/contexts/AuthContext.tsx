@@ -17,6 +17,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (userData: { name: string; email: string; phone?: string; password: string; role: UserRole; businessType?: string }) => Promise<void>;
   logout: () => void;
+  deleteAccount: () => Promise<void>;
   isLoading: boolean;
   isReady: boolean;
 }
@@ -30,7 +31,7 @@ export const useAuth = () => {
 };
 
 // Make sure VITE_API_URL ends with /api/auth
-const API_URL = import.meta.env.VITE_API_BASE + "/auth";
+const API_URL = "https://zarvo.onrender.com/api/auth";
 
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -95,8 +96,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('zarvo_token');
   };
 
+  const deleteAccount = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('zarvo_token');
+      if (!token || !user) throw new Error("Not authenticated");
+
+      const res = await fetch(`${API_URL}/delete-account`, {
+        method: "DELETE",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to delete account");
+      }
+      
+      // Clear user data after successful deletion
+      logout();
+    } catch (error: any) {
+      throw new Error(error.message || "Error deleting account");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, isLoading, isReady }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, deleteAccount, isLoading, isReady }}>
       {children}
     </AuthContext.Provider>
   );
