@@ -14,6 +14,7 @@ import authRoutes from "./routes/authRoutes";
 import bookingRoutes from "./routes/bookingRoutes";
 import slotRoutes from "./routes/slotRoutes";
 import testEmailRoutes from "./routes/testEmail";
+import adminRoutes from "./routes/adminRoutes";
 
 // Seed super-admin and admin users at startup
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
@@ -87,6 +88,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/slots", slotRoutes);
 app.use("/api/test", testEmailRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Health check endpoint
 app.get("/health", (_req, res) => res.send("Server is running ✅"));

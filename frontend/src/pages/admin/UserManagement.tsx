@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Search, Filter, Users, CheckCircle, XCircle, Eye, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import io from 'socket.io-client';
+import { API_BASE, SOCKET_URL } from '@/config/api';
 
 // Define user interface
 interface AdminUser {
@@ -31,71 +33,67 @@ const UserManagement = () => {
   const [roleFilter, setRoleFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
+  const token = typeof window !== 'undefined' ? localStorage.getItem('zarvo_token') : null;
 
   // Redirect if not admin or super-admin
   if (!user || (user.role !== 'admin' && user.role !== 'super-admin')) {
     return <Navigate to="/login" replace />;
   }
 
-  // Mock users data with more realistic entries
-  const [allUsers, setAllUsers] = useState<AdminUser[]>([
-    { 
-      id: '1', 
-      name: 'John Customer', 
-      email: 'customer@test.com', 
-      phone: '+1234567890',
-      role: 'customer', 
-      isActive: true, 
-      joinedDate: '2024-01-15',
-      lastLogin: '2024-02-20'
-    },
-    { 
-      id: '2', 
-      name: 'Dr. Sarah Wilson', 
-      email: 'doctor@test.com', 
-      phone: '+1234567891',
-      role: 'business', 
-      isActive: true, 
-      isApproved: true,
-      businessType: 'Healthcare',
-      joinedDate: '2024-01-10',
-      lastLogin: '2024-02-19'
-    },
-    { 
-      id: '3', 
-      name: 'Jane Business', 
-      email: 'jane@business.com', 
-      phone: '+1234567892',
-      role: 'business', 
-      isActive: true, 
-      isApproved: false,
-      businessType: 'Beauty & Wellness',
-      joinedDate: '2024-02-18',
-      lastLogin: '2024-02-18'
-    },
-    { 
-      id: '4', 
-      name: 'Mike Provider', 
-      email: 'mike@provider.com', 
-      phone: '+1234567893',
-      role: 'business', 
-      isActive: false, 
-      isApproved: true,
-      businessType: 'Professional Services',
-      joinedDate: '2024-01-20',
-      lastLogin: '2024-02-10'
-    },
-    { 
-      id: '5', 
-      name: 'Emma Customer', 
-      email: 'emma@customer.com', 
-      phone: '+1234567894',
-      role: 'customer', 
-      isActive: true,
-      joinedDate: '2024-02-01',
-      lastLogin: '2024-02-19'
-    }
-  ]);
+  // Load users from backend and subscribe to realtime events
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+        const res = await fetch(`${API_BASE}/admin/users`, { headers });
+        const data = await res.json();
+        const mapped: AdminUser[] = (data?.data || []).map((u: any) => ({
+          id: u._id || u.id,
+          name: u.name,
+          email: u.email,
+          phone: u.phone,
+          role: u.role,
+          isActive: u.isActive !== false,
+          isApproved: u.isApproved,
+          businessType: u.businessType,
+          joinedDate: u.createdAt || new Date().toISOString(),
+          lastLogin: u.updatedAt || u.createdAt || new Date().toISOString(),
+        }));
+        setAllUsers(mapped);
+      } catch (e) {
+        console.error('Failed to fetch users', e);
+      }
+    };
+    fetchUsers();
+
+    const s = io(SOCKET_URL);
+    s.on('doctorSignupPending', (doc: any) => {
+      setAllUsers(prev => [{
+        id: doc.id || doc._id,
+        name: doc.name,
+        email: doc.email,
+        phone: doc.phone,
+        role: doc.role || 'business',
+        isActive: true,
+        isApproved: false,
+        businessType: doc.businessType,
+        joinedDate: doc.createdAt || new Date().toISOString(),
+        lastLogin: doc.createdAt || new Date().toISOString(),
+      }, ...prev.filter(u => (u.id) !== (doc.id || doc._id))]);
+    });
+    s.on('doctorApproved', ({ id }: any) => {
+      setAllUsers(prev => prev.map(u => (u.id === id ? { ...u, isApproved: true } : u)));
+    });
+    s.on('doctorRejected', ({ id }: any) => {
+      setAllUsers(prev => prev.filter(u => u.id !== id));
+    });
+    s.on('userRemoved', ({ id }: any) => {
+      setAllUsers(prev => prev.filter(u => u.id !== id));
+    });
+    return () => { s.disconnect(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredUsers = allUsers.filter(usr => {
     const matchesSearch = !searchTerm || 
@@ -107,33 +105,46 @@ const UserManagement = () => {
     const matchesStatus = !statusFilter || statusFilter === 'all' ||
       (statusFilter === 'active' && usr.isActive) ||
       (statusFilter === 'inactive' && !usr.isActive) ||
-      (statusFilter === 'pending' && usr.role === 'business' && usr.isApproved === false) ||
-      (statusFilter === 'approved' && usr.role === 'business' && usr.isApproved === true);
+      (statusFilter === 'pending' && (usr.role === 'business' || usr.role === 'doctor') && usr.isApproved === false) ||
+      (statusFilter === 'approved' && (usr.role === 'business' || usr.role === 'doctor') && usr.isApproved === true);
     
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  const handleApproveUser = (userId: string) => {
-    setAllUsers(users => users.map(u => 
-      u.id === userId ? { ...u, isApproved: true } : u
-    ));
-    toast({
-      title: "User approved",
-      description: "Business user has been approved and can now create slots.",
-    });
+  const handleApproveUser = async (userId: string) => {
+    try {
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const res = await fetch(`${API_BASE}/admin/doctors/${userId}/approve`, { method: 'PATCH', headers });
+      if (!res.ok) throw new Error((await res.json()).message || 'Failed to approve');
+      setAllUsers(users => users.map(u => u.id === userId ? { ...u, isApproved: true } : u));
+      toast({ title: 'User approved', description: 'Business user has been approved and can now create slots.' });
+    } catch (e: any) {
+      toast({ title: 'Failed', description: e.message || 'Approve failed', variant: 'destructive' });
+    }
   };
 
-  const handleDeactivateUser = (userId: string) => {
-    setAllUsers(users => users.map(u => 
-      u.id === userId ? { ...u, isActive: !u.isActive } : u
-    ));
-    const targetUser = allUsers.find(u => u.id === userId);
-    toast({
-      title: targetUser?.isActive ? "User deactivated" : "User activated",
-      description: targetUser?.isActive 
-        ? "User account has been deactivated." 
-        : "User account has been activated.",
-    });
+  const handleRejectUser = async (userId: string) => {
+    try {
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const res = await fetch(`${API_BASE}/admin/doctors/${userId}/reject`, { method: 'PATCH', headers });
+      if (!res.ok) throw new Error((await res.json()).message || 'Failed to reject');
+      setAllUsers(users => users.filter(u => u.id !== userId));
+      toast({ title: 'User rejected', description: 'Business user has been rejected.' });
+    } catch (e: any) {
+      toast({ title: 'Failed', description: e.message || 'Reject failed', variant: 'destructive' });
+    }
+  };
+
+  const handleRemoveCustomer = async (userId: string) => {
+    try {
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const res = await fetch(`${API_BASE}/admin/users/${userId}`, { method: 'DELETE', headers });
+      if (!res.ok) throw new Error((await res.json()).message || 'Failed to remove user');
+      setAllUsers(users => users.filter(u => u.id !== userId));
+      toast({ title: 'User removed', description: 'The user has been removed from the platform.' });
+    } catch (e: any) {
+      toast({ title: 'Failed', description: e.message || 'Remove failed', variant: 'destructive' });
+    }
   };
 
   const getRoleColor = (role: string) => {
@@ -159,13 +170,13 @@ const UserManagement = () => {
     return <Badge className="bg-success text-success-foreground">Active</Badge>;
   };
 
-  const stats = {
+  const stats = useMemo(() => ({
     total: allUsers.length,
     customers: allUsers.filter(u => u.role === 'customer').length,
-    businesses: allUsers.filter(u => u.role === 'business').length,
-    pending: allUsers.filter(u => u.role === 'business' && u.isApproved === false).length,
+    businesses: allUsers.filter(u => (u.role === 'business' || u.role === 'doctor')).length,
+    pending: allUsers.filter(u => (u.role === 'business' || u.role === 'doctor') && u.isApproved === false).length,
     active: allUsers.filter(u => u.isActive).length
-  };
+  }), [allUsers]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -326,7 +337,7 @@ const UserManagement = () => {
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        {usr.role === 'business' && usr.isApproved === false && (
+                        {(usr.role === 'business' || usr.role === 'doctor') && usr.isApproved === false && (
                           <Button
                             size="sm"
                             onClick={() => handleApproveUser(usr.id)}
@@ -336,25 +347,27 @@ const UserManagement = () => {
                             Approve
                           </Button>
                         )}
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeactivateUser(usr.id)}
-                          className={usr.isActive ? "text-destructive" : "text-success"}
-                        >
-                          {usr.isActive ? (
-                            <>
-                              <XCircle className="h-3 w-3 mr-1" />
-                              Deactivate
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Activate
-                            </>
-                          )}
-                        </Button>
+                        {(usr.role === 'business' || usr.role === 'doctor') && usr.isApproved === false && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRejectUser(usr.id)}
+                            className="text-destructive"
+                          >
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Reject
+                          </Button>
+                        )}
+                        {usr.role === 'customer' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRemoveCustomer(usr.id)}
+                            className="text-destructive"
+                          >
+                            Remove
+                          </Button>
+                        )}
 
                         <Dialog>
                           <DialogTrigger asChild>

@@ -3,6 +3,7 @@ import User from "../models/User";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import { getIO } from "../socket";
 
 // JWT token generator (includes role for client-side routing convenience)
 const generateToken = (userId: string, role: string) =>
@@ -24,8 +25,35 @@ export const signup = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Email already exists" });
     }
 
+    // Build payload with proper defaults
+    const isDoctorOrBusiness = role === 'doctor' || role === 'business';
+    const payload: any = {
+      ...req.body,
+      role: role || 'customer',
+      approvalStatus: isDoctorOrBusiness ? 'pending' : 'approved',
+      isApproved: isDoctorOrBusiness ? false : true,
+      isActive: true,
+    };
     // Save all fields from req.body (name, email, password, phone, role, businessType, etc.)
-    const user = await User.create(req.body);
+    const user = await User.create(payload);
+
+    // Emit realtime event for admin dashboards if doctor/business signup pending
+    if (isDoctorOrBusiness) {
+      try {
+        getIO().emit('doctorSignupPending', {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          approvalStatus: user.approvalStatus,
+          isApproved: user.isApproved,
+          createdAt: (user as any).createdAt,
+        });
+      } catch (e) {
+        // socket may not be initialized in some environments
+        console.warn('Socket emit failed for doctorSignupPending');
+      }
+    }
 
     res.status(201).json({
       user: {
@@ -35,6 +63,8 @@ export const signup = async (req: Request, res: Response) => {
         phone: user.phone,
         role: user.role,
         businessType: user.businessType,
+        approvalStatus: (user as any).approvalStatus,
+        isApproved: (user as any).isApproved,
       },
       token: generateToken(user._id.toString(), (user as any).role || 'customer'),
     });
@@ -142,7 +172,6 @@ export const resetPassword = async (req: Request, res: Response) => {
       resetToken: token,
       resetTokenExpiry: { $gt: new Date() },
     });
-
     if (!user) return res.status(400).json({ message: "Invalid or expired token" });
 
     user.password = password;
@@ -155,5 +184,51 @@ export const resetPassword = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Reset password error:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= UPDATE ME =================
+export const updateMe = async (req: Request & { user?: any }, res: Response) => {
+  try {
+    const userId = req.user?._id?.toString?.() || req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const { name, phone, businessType } = req.body as {
+      name?: string;
+      phone?: string;
+      businessType?: string;
+    };
+
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          ...(name !== undefined ? { name } : {}),
+          ...(phone !== undefined ? { phone } : {}),
+          ...(businessType !== undefined ? { businessType } : {}),
+        },
+      },
+      { new: true }
+    ).select("-password");
+
+    if (!updated) return res.status(404).json({ message: "User not found" });
+
+    return res.json({
+      user: {
+        id: updated._id,
+        name: updated.name,
+        email: updated.email,
+        phone: (updated as any).phone,
+        role: (updated as any).role,
+        businessType: (updated as any).businessType,
+        approvalStatus: (updated as any).approvalStatus,
+        isApproved: (updated as any).isApproved,
+      },
+    });
+  } catch (error) {
+    console.error("updateMe error:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };

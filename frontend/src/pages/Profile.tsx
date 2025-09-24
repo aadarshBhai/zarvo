@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { AUTH_API } from '@/config/api';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,13 +37,34 @@ const Profile = () => {
     return <Navigate to="/login" replace />;
   }
 
-  const handleSave = () => {
-    // Mock save operation
-    toast({
-      title: "Profile updated",
-      description: "Your profile information has been updated successfully.",
-    });
-    setIsEditing(false);
+  const handleSave = async () => {
+    try {
+      const token = localStorage.getItem('zarvo_token');
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch(`${AUTH_API}/me`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          phone: formData.phone,
+          businessType: formData.businessType || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Failed to update');
+
+      // Update local storage user to keep other parts in sync on next mount
+      localStorage.setItem('zarvo_user', JSON.stringify(data.user));
+
+      toast({ title: 'Profile updated', description: 'Your profile information has been updated successfully.' });
+      setIsEditing(false);
+    } catch (error: any) {
+      toast({ title: 'Update failed', description: error.message || 'Could not update profile', variant: 'destructive' });
+    }
   };
   
   const handleDeleteAccount = async () => {
@@ -215,7 +237,7 @@ const Profile = () => {
                     <label className="text-sm font-medium text-muted-foreground">Full Name</label>
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
-                      <span>{user.name}</span>
+                      <span>{formData.name || user.name}</span>
                     </div>
                   </div>
 
@@ -223,7 +245,7 @@ const Profile = () => {
                     <label className="text-sm font-medium text-muted-foreground">Email Address</label>
                     <div className="flex items-center gap-2">
                       <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span>{user.email}</span>
+                      <span>{formData.email || user.email}</span>
                     </div>
                   </div>
 
@@ -231,7 +253,7 @@ const Profile = () => {
                     <label className="text-sm font-medium text-muted-foreground">Phone Number</label>
                     <div className="flex items-center gap-2">
                       <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span>{user.phone}</span>
+                      <span>{formData.phone || user.phone}</span>
                     </div>
                   </div>
 
@@ -248,7 +270,7 @@ const Profile = () => {
                       <label className="text-sm font-medium text-muted-foreground">Business Type</label>
                       <div className="flex items-center gap-2">
                         <Building className="h-4 w-4 text-muted-foreground" />
-                        <span>{user.businessType}</span>
+                        <span>{formData.businessType || user.businessType}</span>
                       </div>
                     </div>
                   )}

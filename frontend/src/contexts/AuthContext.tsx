@@ -63,6 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(data.user);
       localStorage.setItem('zarvo_user', JSON.stringify(data.user));
       localStorage.setItem('zarvo_token', data.token);
+      if (data?.user?.role) localStorage.setItem('zarvo_role', data.user.role);
     } catch (error: any) {
       throw new Error(error.message || "Login error");
     } finally {
@@ -84,6 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(data.user);
       localStorage.setItem('zarvo_user', JSON.stringify(data.user));
       localStorage.setItem('zarvo_token', data.token);
+      if (data?.user?.role) localStorage.setItem('zarvo_role', data.user.role);
     } catch (error: any) {
       throw new Error(error.message || "Signup error");
     } finally {
@@ -95,6 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     localStorage.removeItem('zarvo_user');
     localStorage.removeItem('zarvo_token');
+    localStorage.removeItem('zarvo_role');
   };
 
   const deleteAccount = async () => {

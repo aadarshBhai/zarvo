@@ -8,6 +8,12 @@ export interface IUser extends Document {
   [key: string]: any; // <- This allows any extra fields
   resetToken?: string;
   resetTokenExpiry?: Date;
+  role?: "customer" | "business" | "doctor" | "admin" | "super-admin";
+  // approvalStatus is for business/doctor accounts: 'pending' | 'approved' | 'rejected'
+  approvalStatus?: string;
+  isApproved?: boolean; // derived convenience flag
+  isActive?: boolean;
+  deletedAt?: Date | null;
   comparePassword: (password: string) => Promise<boolean>;
 }
 
@@ -15,9 +21,14 @@ const UserSchema: Schema<IUser> = new Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  role: { type: String, enum: ["customer", "business", "doctor", "admin", "super-admin"], default: "customer" },
+  approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" },
+  isApproved: { type: Boolean, default: true },
+  isActive: { type: Boolean, default: true },
+  deletedAt: { type: Date, default: null },
   resetToken: { type: String },
   resetTokenExpiry: { type: Date },
-}, { strict: false }); // <- Important: allows saving extra fields
+}, { strict: false, timestamps: true }); // <- Important: allows saving extra fields
 
 // Hash password before saving
 UserSchema.pre("save", async function (next) {

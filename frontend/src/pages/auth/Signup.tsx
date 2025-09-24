@@ -150,8 +150,8 @@ const Signup = () => {
                     <SelectValue placeholder="Select your role" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="customer">Customer (Book appointments)</SelectItem>
-                    <SelectItem value="business">Business Professional (Provide services)</SelectItem>
+                    <SelectItem value="customer">Guest (Book appointments)</SelectItem>
+                    <SelectItem value="business">BProfessional (Provide services)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
