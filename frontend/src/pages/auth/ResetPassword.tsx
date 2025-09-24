@@ -26,13 +26,14 @@ const ResetPassword = () => {
       setLoading(true);
 
       // ✅ Updated API URL
-      const API_BASE = import.meta.env.VITE_API_BASE || window.location.origin;
+      const API_BASE = import.meta.env.VITE_API_URL; // use VITE_API_URL for auth APIs
 
-      const res = await fetch(`${API_BASE}/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
-      });
+const res = await fetch(`${API_BASE}/reset-password`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ token, password }),
+});
+
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed");
