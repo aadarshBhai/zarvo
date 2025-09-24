@@ -35,9 +35,9 @@ const server = http.createServer(app);
 // Seed super-admin and admin accounts (runs once if they do not exist)
 async function seedAdminUsers() {
   try {
-    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "aadarshgolucky@gmail.com";
+    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "zarvosuperadmin@gmail.com";
     const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || "Aa1#Aa1#";
-    const adminEmail = process.env.ADMIN_EMAIL || "goodluckaadarsh@mail.com";
+    const adminEmail = process.env.ADMIN_EMAIL || "zarvoadmin@gmail.com";
     const adminPassword = process.env.ADMIN_PASSWORD || "Aa1#Aa1#";
 
     // Super Admin
