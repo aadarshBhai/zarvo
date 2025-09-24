@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { User, Mail, Phone, Building, Calendar, Settings, Trash2 } from 'lucide-react';
+import { User, Mail, Phone, Building, Calendar, Settings, Trash2, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -137,9 +137,11 @@ const Profile = () => {
                     <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="name"
+                      name="name"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="pl-10"
+                      autoComplete="name"
                     />
                   </div>
                 </div>
@@ -150,10 +152,12 @@ const Profile = () => {
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="email"
+                      name="email"
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       className="pl-10"
+                      autoComplete="email"
                     />
                   </div>
                 </div>
@@ -164,10 +168,12 @@ const Profile = () => {
                     <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="phone"
+                      name="phone"
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       className="pl-10"
+                      autoComplete="tel"
                     />
                   </div>
                 </div>
@@ -179,9 +185,11 @@ const Profile = () => {
                       <Building className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="businessType"
+                        name="businessType"
                         value={formData.businessType}
                         onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
                         className="pl-10"
+                        autoComplete="organization"
                       />
                     </div>
                   </div>

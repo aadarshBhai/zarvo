@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import axios, { AxiosResponse } from "axios";
 import io from "socket.io-client";
+import { API_BASE as API_URL, SOCKET_URL as SOCKET_URL_CFG } from "@/config/api";
 
 // -------------------- TYPES --------------------
 export interface Doctor {
@@ -112,10 +113,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [socket, setSocket] = useState<any>(null);
 
-  // Prefer Vite-provided envs, otherwise default to current origin so prod builds work without hardcoded localhost
-  const ORIGIN = (typeof window !== "undefined" && window.location?.origin) ? window.location.origin : import.meta.env.VITE_API_BASE;
-  const API_URL = (import.meta as any).env?.VITE_API_BASE || `${ORIGIN}/api`;
-  const SOCKET_URL = (import.meta as any).env?.VITE_SOCKET_URL || ORIGIN;
+  // Centralized URLs from config
+  const SOCKET_URL = SOCKET_URL_CFG;
 
   // -------------------- BUSINESS SLOTS --------------------
   const getBusinessSlots = async (): Promise<TimeSlot[]> => {

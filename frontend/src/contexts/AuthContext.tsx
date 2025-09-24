@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { AUTH_API } from '@/config/api';
 
 export type UserRole = 'customer' | 'business' | 'admin';
 
@@ -30,8 +31,8 @@ export const useAuth = () => {
   return context;
 };
 
-// Make sure VITE_API_URL ends with /api/auth
-const API_URL = "https://zarvo.onrender.com/api/auth";
+// Centralized auth API base (should end with /api/auth)
+const API_URL = AUTH_API;
 
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

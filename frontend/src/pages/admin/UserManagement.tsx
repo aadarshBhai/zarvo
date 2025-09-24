@@ -253,9 +253,9 @@ const UserManagement = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Role</label>
+                <label htmlFor="roleFilter" className="text-sm font-medium">Role</label>
                 <Select onValueChange={setRoleFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger id="roleFilter" name="role">
                     <SelectValue placeholder="All roles" />
                   </SelectTrigger>
                   <SelectContent>
@@ -268,9 +268,9 @@ const UserManagement = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Status</label>
+                <label htmlFor="statusFilter" className="text-sm font-medium">Status</label>
                 <Select onValueChange={setStatusFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger id="statusFilter" name="status">
                     <SelectValue placeholder="All statuses" />
                   </SelectTrigger>
                   <SelectContent>

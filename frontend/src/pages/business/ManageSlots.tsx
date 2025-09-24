@@ -228,7 +228,7 @@ const ManageSlots = () => {
                     value={newSlot.department}
                     onValueChange={(value) => setNewSlot({ ...newSlot, department: value })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="department" name="department">
                       <SelectValue placeholder="Select department" />
                     </SelectTrigger>
                     <SelectContent>
@@ -246,7 +246,7 @@ const ManageSlots = () => {
                       value={newSlot.duration.toString()}
                       onValueChange={(value) => setNewSlot({ ...newSlot, duration: parseInt(value) })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="duration" name="duration">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

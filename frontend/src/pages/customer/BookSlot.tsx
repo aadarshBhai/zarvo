@@ -159,6 +159,7 @@ const BookSlot: React.FC = () => {
                     value={userForm.name}
                     onChange={handleChange}
                     className="mt-1 w-full p-2 border rounded-lg"
+                    autoComplete="name"
                   />
                 </div>
                 <div>
@@ -175,6 +176,7 @@ const BookSlot: React.FC = () => {
                     value={userForm.email}
                     onChange={handleChange}
                     className="mt-1 w-full p-2 border rounded-lg"
+                    autoComplete="email"
                   />
                 </div>
                 <div>
@@ -191,6 +193,7 @@ const BookSlot: React.FC = () => {
                     value={userForm.phone}
                     onChange={handleChange}
                     className="mt-1 w-full p-2 border rounded-lg"
+                    autoComplete="tel"
                   />
                 </div>
                 <div>
@@ -207,6 +210,7 @@ const BookSlot: React.FC = () => {
                     value={userForm.age}
                     onChange={handleChange}
                     className="mt-1 w-full p-2 border rounded-lg"
+                    autoComplete="off"
                   />
                 </div>
                 <div>
@@ -222,6 +226,7 @@ const BookSlot: React.FC = () => {
                     value={userForm.gender}
                     onChange={handleChange}
                     className="mt-1 w-full p-2 border rounded-lg"
+                    autoComplete="sex"
                   >
                     <option value="">Select gender</option>
                     <option value="Male">Male</option>

@@ -133,7 +133,7 @@ const Signup = () => {
               <div className="space-y-2">
                 <Label htmlFor="role">I want to register as *</Label>
                 <Select onValueChange={(value) => setFormData({ ...formData, role: value as UserRole })}>
-                  <SelectTrigger>
+                  <SelectTrigger id="role" name="role">
                     <SelectValue placeholder="Select your role" />
                   </SelectTrigger>
                   <SelectContent>
@@ -149,11 +149,13 @@ const Signup = () => {
                   <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="name"
+                    name="name"
                     type="text"
                     placeholder="Enter your full name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="pl-10"
+                    autoComplete="name"
                     required
                   />
                 </div>
@@ -165,11 +167,13 @@ const Signup = () => {
                   <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
+                    name="email"
                     type="email"
                     placeholder="Enter your email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="pl-10"
+                    autoComplete="email"
                     required
                   />
                 </div>
@@ -181,11 +185,13 @@ const Signup = () => {
                   <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="phone"
+                    name="phone"
                     type="tel"
                     placeholder="+1 (555) 123-4567"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="pl-10"
+                    autoComplete="tel"
                     required
                   />
                 </div>
@@ -197,7 +203,7 @@ const Signup = () => {
                   <div className="relative">
                     <Building className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Select onValueChange={(value) => setFormData({ ...formData, businessType: value })}>
-                      <SelectTrigger className="pl-10">
+                      <SelectTrigger id="businessType" name="businessType" className="pl-10">
                         <SelectValue placeholder="Select your business type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -216,11 +222,13 @@ const Signup = () => {
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
+                    name="password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Create a password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="pl-10 pr-10"
+                    autoComplete="new-password"
                     required
                   />
                   <Button
@@ -241,11 +249,13 @@ const Signup = () => {
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="confirmPassword"
+                    name="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                     className="pl-10 pr-10"
+                    autoComplete="new-password"
                     required
                   />
                   <Button

@@ -145,9 +145,9 @@ const ViewBookings: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Status</label>
+                <label htmlFor="statusFilter" className="text-sm font-medium">Status</label>
                 <Select onValueChange={setStatusFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger id="statusFilter" name="status">
                     <SelectValue placeholder="All statuses" />
                   </SelectTrigger>
                   <SelectContent>
