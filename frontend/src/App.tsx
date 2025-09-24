@@ -13,6 +13,7 @@ import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
+import AdminLogin from "./pages/auth/AdminLogin";
 
 import BookSlot from "./pages/customer/BookSlot";
 import MyBookings from "./pages/customer/MyBookings";
@@ -41,6 +42,7 @@ const App = () => (
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/login" element={<Login />} />
+                  <Route path="/admin/login" element={<AdminLogin />} />
                   <Route path="/signup" element={<Signup />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password/:token" element={<ResetPassword />} />
