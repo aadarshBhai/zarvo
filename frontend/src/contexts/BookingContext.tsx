@@ -368,6 +368,14 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       );
     });
 
+    // When a booking is cancelled/deleted by doctor or customer
+    s.on("bookingCancelled", (evt: { id: string; slotId?: string }) => {
+      setBookings(prev => prev.filter(b => (b as any).id !== evt.id && (b as any)._id !== evt.id));
+      if (evt.slotId) {
+        setSlots(prev => prev.map(slot => (slot.id === (evt.slotId as any) ? { ...slot, isBooked: false, customer: undefined } : slot)));
+      }
+    });
+
     return () => {
       s.disconnect();
     };

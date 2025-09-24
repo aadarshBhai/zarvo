@@ -39,6 +39,27 @@ export const signup = async (req: Request, res: Response) => {
   }
 };
 
+// ================= DELETE ACCOUNT =================
+export const deleteAccount = async (req: Request & { user?: any }, res: Response) => {
+  try {
+    const userId = req.user?._id?.toString?.() || req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const existing = await User.findById(userId);
+    if (!existing) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await User.findByIdAndDelete(userId);
+    return res.status(200).json({ message: "Account deleted" });
+  } catch (error) {
+    console.error("Delete account error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ================= LOGIN =================
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;

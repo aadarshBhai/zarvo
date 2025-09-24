@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import QRCode from "qrcode";
+import { API_BASE } from "@/config/api";
 
 interface Booking {
   _id: string;
@@ -23,9 +24,11 @@ interface Booking {
 }
 
 const MyBookings: React.FC = () => {
-  const API_URL = import.meta.env.VITE_API_BASE;
+  const API_URL = API_BASE;
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [qrCodes, setQrCodes] = useState<{ [key: string]: string }>({});
+  const [message, setMessage] = useState<string>("");
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -39,8 +42,9 @@ const MyBookings: React.FC = () => {
           const qr = await QRCode.toDataURL(text);
           setQrCodes(prev => ({ ...prev, [booking._id]: qr }));
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
+        setError(err?.response?.data?.message || "Failed to load bookings");
       }
     };
 
@@ -50,6 +54,8 @@ const MyBookings: React.FC = () => {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h2 className="text-2xl font-bold mb-4">My Bookings</h2>
+      {message && <div className="mb-3 text-green-600">{message}</div>}
+      {error && <div className="mb-3 text-red-600">{error}</div>}
 
       {bookings.length === 0 && <p>No bookings yet.</p>}
 
@@ -68,6 +74,32 @@ const MyBookings: React.FC = () => {
             {qrCodes[booking._id] && (
               <img src={qrCodes[booking._id]} alt="QR Code" className="mt-2" />
             )}
+            <div className="mt-3">
+              <button
+                className={`px-3 py-2 rounded text-white ${booking.status === 'booked' ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-400 cursor-not-allowed'}`}
+                disabled={booking.status !== 'booked'}
+                onClick={async () => {
+                  try {
+                    setMessage("");
+                    setError("");
+                    const token = localStorage.getItem("zarvo_token");
+                    await axios.post(
+                      `${API_URL}/bookings/${booking._id}/cancel`,
+                      {},
+                      token ? { headers: { Authorization: `Bearer ${token}` } } : {}
+                    );
+                    // update locally
+                    setBookings(prev => prev.map(b => b._id === booking._id ? { ...b, status: 'cancelled' } : b));
+                    setMessage("Booking cancelled successfully");
+                  } catch (err: any) {
+                    const msg = err?.response?.data?.message || "Failed to cancel booking";
+                    setError(msg);
+                  }
+                }}
+              >
+                Cancel Booking
+              </button>
+            </div>
           </div>
         ))}
       </div>

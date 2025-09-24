@@ -7,7 +7,9 @@ import {
   getBookingById,
   updateBooking,
   deleteBooking,
+  cancelBooking,
 } from "../controllers/bookingController";
+import { protect } from "../middleware/authMiddleware";
 
 const router = Router();
 
@@ -38,5 +40,9 @@ router.put("/:id", updateBooking);
 // @route   DELETE /api/bookings/:id
 // @desc    Delete a booking
 router.delete("/:id", deleteBooking);
+
+// @route   POST /api/bookings/:id/cancel
+// @desc    Customer cancels a booking (server enforces 2-hour cutoff)
+router.post("/:id/cancel", protect, cancelBooking);
 
 export default router;
