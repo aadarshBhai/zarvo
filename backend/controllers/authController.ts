@@ -33,9 +33,35 @@ export const signup = async (req: Request, res: Response) => {
       approvalStatus: isDoctorOrBusiness ? 'pending' : 'approved',
       isApproved: isDoctorOrBusiness ? false : true,
       isActive: true,
+      emailVerified: false,
     };
     // Save all fields from req.body (name, email, password, phone, role, businessType, etc.)
     const user = await User.create(payload);
+
+    // Generate and store OTP for email verification
+    const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
+    (user as any).emailVerificationOTP = otp;
+    (user as any).emailVerificationExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
+
+    // Send verification email via free Gmail SMTP
+    try {
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER!,
+          pass: process.env.EMAIL_PASS!,
+        },
+      });
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER!,
+        to: user.email,
+        subject: "Verify your email",
+        html: `<p>Your verification code is <b>${otp}</b>. It expires in 15 minutes.</p>`,
+      });
+    } catch (e) {
+      console.error("Failed to send verification email", e);
+    }
 
     // Emit realtime event for admin dashboards if doctor/business signup pending
     if (isDoctorOrBusiness) {
@@ -56,6 +82,7 @@ export const signup = async (req: Request, res: Response) => {
     }
 
     res.status(201).json({
+      message: "Signup successful. Please verify your email with the OTP sent to you.",
       user: {
         id: user._id,
         name: user.name,
@@ -65,12 +92,74 @@ export const signup = async (req: Request, res: Response) => {
         businessType: user.businessType,
         approvalStatus: (user as any).approvalStatus,
         isApproved: (user as any).isApproved,
-      },
-      token: generateToken(user._id.toString(), (user as any).role || 'customer'),
+        emailVerified: (user as any).emailVerified,
+      }
     });
   } catch (error) {
     console.error("Signup error:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= VERIFY EMAIL (OTP) =================
+export const verifyEmail = async (req: Request, res: Response) => {
+  const { email, otp } = req.body as { email: string; otp: string };
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if ((user as any).emailVerified === true) {
+      return res.status(200).json({ message: "Email already verified" });
+    }
+
+    const expected = (user as any).emailVerificationOTP;
+    const expiry = (user as any).emailVerificationExpiry as Date | undefined;
+    if (!expected || !expiry || new Date() > new Date(expiry)) {
+      return res.status(400).json({ message: "OTP expired. Please request a new one." });
+    }
+    if (String(otp) !== String(expected)) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    (user as any).emailVerified = true;
+    (user as any).emailVerificationOTP = undefined;
+    (user as any).emailVerificationExpiry = undefined;
+    await user.save();
+
+    return res.status(200).json({ message: "Email verified successfully" });
+  } catch (e) {
+    console.error("verifyEmail error:", e);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= RESEND OTP =================
+export const resendOtp = async (req: Request, res: Response) => {
+  const { email } = req.body as { email: string };
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if ((user as any).emailVerified === true) {
+      return res.status(200).json({ message: "Email already verified" });
+    }
+    const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
+    (user as any).emailVerificationOTP = otp;
+    (user as any).emailVerificationExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: process.env.EMAIL_USER!, pass: process.env.EMAIL_PASS! },
+    });
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER!,
+      to: user.email,
+      subject: "Your OTP code",
+      html: `<p>Your verification code is <b>${otp}</b>. It expires in 15 minutes.</p>`,
+    });
+    return res.status(200).json({ message: "OTP sent" });
+  } catch (e) {
+    console.error("resendOtp error:", e);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -105,6 +194,11 @@ export const login = async (req: Request, res: Response) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
+    // Block login if email not verified yet
+    if ((user as any).emailVerified === false) {
+      return res.status(403).json({ message: "Email not verified. Please verify your email to continue." });
+    }
+
     res.status(200).json({
       user: {
         id: user._id,
@@ -113,6 +207,7 @@ export const login = async (req: Request, res: Response) => {
         phone: user.phone,
         role: user.role,
         businessType: user.businessType,
+        emailVerified: (user as any).emailVerified,
       },
       token: generateToken(user._id.toString(), (user as any).role || 'customer'),
     });

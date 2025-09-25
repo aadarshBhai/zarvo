@@ -16,9 +16,11 @@ export interface User {
 export interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  signup: (userData: { name: string; email: string; phone?: string; password: string; role: UserRole; businessType?: string }) => Promise<void>;
+  signup: (userData: { name: string; email: string; phone?: string; password: string; role: UserRole; businessType?: string }) => Promise<any>;
   logout: () => void;
   deleteAccount: () => Promise<void>;
+  verifyEmail: (email: string, otp: string) => Promise<void>;
+  resendOtp: (email: string) => Promise<void>;
   isLoading: boolean;
   isReady: boolean;
 }
@@ -81,16 +83,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Signup failed");
-
-      setUser(data.user);
-      localStorage.setItem('zarvo_user', JSON.stringify(data.user));
-      localStorage.setItem('zarvo_token', data.token);
-      if (data?.user?.role) localStorage.setItem('zarvo_role', data.user.role);
+      // Some flows return token immediately; our secured flow requires email verification first.
+      if (data?.token && data?.user) {
+        setUser(data.user);
+        localStorage.setItem('zarvo_user', JSON.stringify(data.user));
+        localStorage.setItem('zarvo_token', data.token);
+        if (data?.user?.role) localStorage.setItem('zarvo_role', data.user.role);
+      }
+      return data;
     } catch (error: any) {
       throw new Error(error.message || "Signup error");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const verifyEmail = async (email: string, otp: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/verify-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Verification failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resendOtp = async (email: string) => {
+    const res = await fetch(`${API_URL}/resend-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.message || 'Failed to resend OTP');
   };
 
   const logout = () => {
@@ -129,7 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, deleteAccount, isLoading, isReady }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, deleteAccount, verifyEmail, resendOtp, isLoading, isReady }}>
       {children}
     </AuthContext.Provider>
   );

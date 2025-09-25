@@ -14,6 +14,7 @@ import Signup from "./pages/auth/Signup";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import AdminLogin from "./pages/auth/AdminLogin";
+import VerifyEmail from "./pages/auth/VerifyEmail";
 
 import BookSlot from "./pages/customer/BookSlot";
 import MyBookings from "./pages/customer/MyBookings";
@@ -22,6 +23,7 @@ import ManageSlots from "./pages/business/ManageSlots";
 import ViewBookings from "./pages/business/ViewBookings";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UserManagement from "./pages/admin/UserManagement";
+import Settings from "./pages/admin/Settings";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
@@ -46,6 +48,7 @@ const App = () => (
                   <Route path="/signup" element={<Signup />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password/:token" element={<ResetPassword />} />
+                  <Route path="/verify-email" element={<VerifyEmail />} />
 
                   <Route path="/book-slot" element={<BookSlot />} />
                   <Route path="/my-bookings" element={<MyBookings />} />
@@ -54,6 +57,7 @@ const App = () => (
                   <Route path="/view-bookings" element={<ViewBookings />} />
                   <Route path="/admin-dashboard" element={<AdminDashboard />} />
                   <Route path="/user-management" element={<UserManagement />} />
+                  <Route path="/settings" element={<Settings />} />
                   <Route path="/profile" element={<Profile />} />
 
                   <Route path="*" element={<NotFound />} />

@@ -8,6 +8,9 @@ export interface IUser extends Document {
   [key: string]: any; // <- This allows any extra fields
   resetToken?: string;
   resetTokenExpiry?: Date;
+  emailVerified?: boolean;
+  emailVerificationOTP?: string;
+  emailVerificationExpiry?: Date;
   role?: "customer" | "business" | "doctor" | "admin" | "super-admin";
   // approvalStatus is for business/doctor accounts: 'pending' | 'approved' | 'rejected'
   approvalStatus?: string;
@@ -25,6 +28,9 @@ const UserSchema: Schema<IUser> = new Schema({
   approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" },
   isApproved: { type: Boolean, default: true },
   isActive: { type: Boolean, default: true },
+  emailVerified: { type: Boolean, default: false },
+  emailVerificationOTP: { type: String },
+  emailVerificationExpiry: { type: Date },
   deletedAt: { type: Date, default: null },
   resetToken: { type: String },
   resetTokenExpiry: { type: Date },

@@ -84,7 +84,7 @@ const Signup = () => {
     }
 
     try {
-      await signup({
+      const result = await signup({
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
@@ -94,14 +94,12 @@ const Signup = () => {
       });
 
       toast({
-        title: "Account created successfully!",
-        description: formData.role === 'business'
-          ? "Your account is pending approval. You'll be notified once approved."
-          : "Welcome to Zarvo! You can now login and start booking appointments.",
+        title: "Account created! Verify your email",
+        description: "We've sent a 6-digit code to your email. Enter it to activate your account.",
       });
 
-      // Redirect to login page after signup
-      navigate('/login');
+      // Redirect to email verification page
+      navigate('/verify-email', { state: { email: formData.email } });
     } catch (error: any) {
       const message = error?.message || 'Failed to create account. Please try again.';
       setError(message);
