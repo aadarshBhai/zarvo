@@ -16,7 +16,7 @@ export async function verifyCaptcha(req: Request, res: Response, next: NextFunct
     if (!token) return res.status(400).json({ message: "Missing captcha token" });
 
     if (hcaptchaSecret) {
-      const resp = await axios.post("https://hcaptcha.com/siteverify", null, {
+      const resp = await axios.post<{ success: boolean }>("https://hcaptcha.com/siteverify", null, {
         params: { secret: hcaptchaSecret, response: token },
       });
       if (!resp.data?.success) return res.status(400).json({ message: "Captcha verification failed" });
@@ -24,7 +24,7 @@ export async function verifyCaptcha(req: Request, res: Response, next: NextFunct
     }
 
     if (recaptchaSecret) {
-      const resp = await axios.post("https://www.google.com/recaptcha/api/siteverify", null, {
+      const resp = await axios.post<{ success: boolean }>("https://www.google.com/recaptcha/api/siteverify", null, {
         params: { secret: recaptchaSecret, response: token },
       });
       if (!resp.data?.success) return res.status(400).json({ message: "Captcha verification failed" });
@@ -36,3 +36,4 @@ export async function verifyCaptcha(req: Request, res: Response, next: NextFunct
     return res.status(500).json({ message: "Captcha verification error" });
   }
 }
+
