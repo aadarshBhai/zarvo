@@ -10,7 +10,6 @@
   },
   "include": [
     "server.ts",
-    "firebaseAdmin.ts",
     "config/**/*",
     "routes/**/*",
     "models/**/*",
