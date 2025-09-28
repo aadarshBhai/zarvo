@@ -1,14 +1,45 @@
 import nodemailer from 'nodemailer';
 
 // Email configuration
-const createTransporter = () => {
+export const createTransporter = () => {
+  const {
+    SMTP_HOST,
+    SMTP_PORT,
+    SMTP_SECURE,
+    SMTP_USER,
+    SMTP_PASS,
+    EMAIL_SERVICE,
+    EMAIL_USER,
+    EMAIL_PASS,
+  } = process.env as Record<string, string | undefined>;
+
+  // Prefer explicit SMTP host/port if provided
+  if (SMTP_HOST) {
+    const port = Number(SMTP_PORT || 587);
+    const secure = String(SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
+    return nodemailer.createTransport({
+      host: SMTP_HOST,
+      port,
+      secure,
+      auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      pool: true,
+      connectionTimeout: 10000,
+      socketTimeout: 10000,
+    } as any);
+  }
+
+  // Otherwise fall back to a known service (default to gmail)
+  const service = EMAIL_SERVICE || 'gmail';
   return nodemailer.createTransport({
-    service: 'gmail', // You can use other services like 'outlook', 'yahoo', etc.
+    service,
     auth: {
-      user: process.env.EMAIL_USER || 'your-email@gmail.com',
-      pass: process.env.EMAIL_PASS || 'your-app-password'
-    }
-  });
+      user: EMAIL_USER || SMTP_USER || 'your-email@gmail.com',
+      pass: EMAIL_PASS || SMTP_PASS || 'your-app-password',
+    },
+    pool: true,
+    connectionTimeout: 10000,
+    socketTimeout: 10000,
+  } as any);
 };
 
 // Notify doctor/provider about a customer cancellation
@@ -46,7 +77,12 @@ export const notifyDoctorCancellation = async (booking: any, slot: any) => {
     console.log('✅ Doctor cancellation email sent successfully:', result.messageId);
     return { success: true, messageId: result.messageId };
   } catch (error) {
-    console.error('❌ Error sending doctor cancellation email:', error);
+    console.error('❌ Error sending doctor cancellation email:', {
+      error,
+      hint: 'Check SMTP connectivity and credentials',
+      usingHost: Boolean(process.env.SMTP_HOST),
+      service: process.env.EMAIL_SERVICE || 'gmail',
+    });
     return { success: false, error };
   }
 };
@@ -181,7 +217,12 @@ export const sendBookingConfirmation = async (booking: any) => {
     console.log('✅ Booking confirmation email sent successfully:', result.messageId);
     return { success: true, messageId: result.messageId };
   } catch (error) {
-    console.error('❌ Error sending booking confirmation email:', error);
+    console.error('❌ Error sending booking confirmation email:', {
+      error,
+      hint: 'Check SMTP connectivity and credentials',
+      usingHost: Boolean(process.env.SMTP_HOST),
+      service: process.env.EMAIL_SERVICE || 'gmail',
+    });
     return { success: false, error: error };
   }
 };
@@ -210,13 +251,43 @@ export const sendBookingCancellation = async (booking: any) => {
     console.log('✅ Booking cancellation email sent successfully:', result.messageId);
     return { success: true, messageId: result.messageId };
   } catch (error) {
-    console.error('❌ Error sending booking cancellation email:', error);
+    console.error('❌ Error sending booking cancellation email:', {
+      error,
+      hint: 'Check SMTP connectivity and credentials',
+      usingHost: Boolean(process.env.SMTP_HOST),
+      service: process.env.EMAIL_SERVICE || 'gmail',
+    });
     return { success: false, error: error };
+  }
+};
+
+// Send password reset email
+export const sendPasswordResetEmail = async (to: string, resetUrl: string) => {
+  try {
+    const transporter = createTransporter();
+    const fromAddr = process.env.SMTP_FROM || process.env.EMAIL_USER || 'noreply@zarvo.com';
+    const result = await transporter.sendMail({
+      from: `Zarvo <${fromAddr}>`,
+      to,
+      subject: 'Password Reset',
+      html: `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link valid for 1 hour.</p>`,
+    });
+    console.log('✅ Password reset email sent successfully:', result.messageId);
+    return { success: true, messageId: result.messageId };
+  } catch (error) {
+    console.error('❌ Error sending password reset email:', {
+      error,
+      hint: 'Check SMTP connectivity and credentials',
+      usingHost: Boolean(process.env.SMTP_HOST),
+      service: process.env.EMAIL_SERVICE || 'gmail',
+    });
+    return { success: false, error };
   }
 };
 
 export default {
   sendBookingConfirmation,
   sendBookingCancellation,
-  notifyDoctorCancellation
+  notifyDoctorCancellation,
+  sendPasswordResetEmail,
 };

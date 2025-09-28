@@ -7,6 +7,7 @@ import Doctor from "../models/Doctor";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import { sendPasswordResetEmail } from "../services/emailService";
 import { getIO } from "../socket";
 
 const generateToken = (userId: string, role: string) =>
@@ -340,15 +341,6 @@ export const forgotPassword = async (req: Request, res: Response) => {
     user.resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour
     await user.save();
 
-    // Send email
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER!,
-        pass: process.env.EMAIL_PASS!,
-      },
-    });
-
     // Determine frontend base URL robustly
     const originHeader = (req.headers["origin"] || req.headers["referer"]) as string | undefined;
     const rawOrigins = (process.env.FRONTEND_URLS || "")
@@ -359,13 +351,12 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const frontendUrl = (process.env.FRONTEND_URL || primaryFromList || originHeader || "https://zarvo.onrender.com").replace(/\/$/, "");
     const resetUrl = `${frontendUrl}/reset-password/${token}`;
 
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER!,
-      to: user.email,
-      subject: "Password Reset",
-      html: `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link valid for 1 hour.</p>`,
-    });
+    // Send email via centralized mailer
+    const sendRes = await sendPasswordResetEmail(user.email, resetUrl);
+    if (!sendRes.success) {
+      console.error("Forgot password mail send failed:", sendRes.error);
+      return res.status(500).json({ message: "Failed to send reset email" });
+    }
 
     res.status(200).json({ message: "Password reset email sent" });
   } catch (error) {
