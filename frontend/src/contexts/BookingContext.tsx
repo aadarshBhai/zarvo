@@ -1,8 +1,10 @@
 // src/contexts/BookingContext.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
-import axios, { AxiosResponse } from "axios";
+import axios from "axios";
 import io from "socket.io-client";
 import { API_BASE as API_URL, SOCKET_URL as SOCKET_URL_CFG } from "@/config/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 // -------------------- TYPES --------------------
 export interface Doctor {
@@ -22,6 +24,7 @@ export interface Customer {
 
 export interface TimeSlot {
   id: string;
+  businessId?: string;
   date: string;
   time: string;
   duration: number;
@@ -54,6 +57,7 @@ export interface Booking {
 interface SlotApi {
   _id?: string;
   id?: string;
+  businessId?: string;
   date: string;
   time: string;
   duration: number;
@@ -112,6 +116,8 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [socket, setSocket] = useState<any>(null);
+  const { user, refreshMe } = useAuth();
+  const { toast } = useToast();
 
   // Centralized URLs from config
   const SOCKET_URL = SOCKET_URL_CFG;
@@ -120,7 +126,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const getBusinessSlots = async (): Promise<TimeSlot[]> => {
     try {
       const token = localStorage.getItem("zarvo_token");
-      const res: AxiosResponse<ApiEnvelope<SlotApi[]> | SlotApi[]> = await axios.get(
+      const res = await axios.get<ApiEnvelope<SlotApi[]> | SlotApi[]>(
         `${API_URL}/slots/my-slots`,
         token ? { headers: { Authorization: `Bearer ${token}` } } : {}
       );
@@ -129,6 +135,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         : (Array.isArray(res.data) ? (res.data as SlotApi[]) : []);
       return dataArray.map((s: SlotApi) => ({
         id: s._id || s.id,
+        businessId: s.businessId,
         date: s.date,
         time: s.time,
         duration: s.duration,
@@ -140,7 +147,14 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         bookingCreatedAt: s.bookingCreatedAt || undefined,
       }));
     } catch (err) {
-      console.error("Error fetching business slots:", err);
+      const status = (err as any)?.response?.status;
+      const message = (err as any)?.response?.data?.message;
+      if (status === 403) {
+        // Likely pending approval for business/doctor accounts
+        // Suppress popup on business dashboard; just return empty list silently.
+        return [];
+      }
+      console.error("Error fetching business slots:", (err as any)?.response?.data || err);
       return [];
     }
   };
@@ -150,7 +164,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const token = localStorage.getItem("zarvo_token");
       const role = localStorage.getItem("zarvo_role");
-      let response: AxiosResponse<ApiEnvelope<BookingApi[]> | BookingApi[]> | { data: BookingApi[] };
+      let response: { data: ApiEnvelope<BookingApi[]> | BookingApi[] };
 
       if (token && role === "doctor") {
         response = await axios.get<ApiEnvelope<BookingApi[]> | BookingApi[]>(`${API_URL}/bookings/my-bookings`, {
@@ -167,7 +181,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const list: BookingApi[] = Array.isArray((response.data as any)?.data)
         ? (response.data as ApiEnvelope<BookingApi[]>).data
         : (Array.isArray(response.data) ? (response.data as BookingApi[]) : []);
-      setBookings(list as unknown as Booking[]);
+      const mapped: Booking[] = list.map((b: any) => ({
+        ...(b as any),
+        id: b._id || b.id,
+      }));
+      setBookings(mapped);
     } catch (err: any) {
       console.error("Error fetching bookings:", err.response?.data || err);
     }
@@ -181,13 +199,22 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchSlots = async () => {
     try {
       const token = localStorage.getItem("zarvo_token");
-      const role = localStorage.getItem("zarvo_role");
-      let response: AxiosResponse<ApiEnvelope<SlotApi[]> | SlotApi[]>;
+      const isPrivileged = !!user && (user.role === "doctor" || user.role === "business") && user.isApproved === true;
+      let response: { data: ApiEnvelope<SlotApi[]> | SlotApi[] };
 
-      if (token && role === "doctor") {
-        response = await axios.get<ApiEnvelope<SlotApi[]> | SlotApi[]>(`${API_URL}/slots/my-slots`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+      if (token && isPrivileged) {
+        try {
+          response = await axios.get<ApiEnvelope<SlotApi[]> | SlotApi[]>(`${API_URL}/slots/my-slots`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } catch (err: any) {
+          if (err?.response?.status === 403 || err?.response?.status === 401) {
+            // Fallback to public slots if not approved or forbidden
+            response = await axios.get<ApiEnvelope<SlotApi[]> | SlotApi[]>(`${API_URL}/slots`);
+          } else {
+            throw err;
+          }
+        }
       } else {
         response = await axios.get<ApiEnvelope<SlotApi[]> | SlotApi[]>(`${API_URL}/slots`);
       }
@@ -197,6 +224,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         : (Array.isArray(response.data) ? (response.data as SlotApi[]) : []);
       const mappedSlots: TimeSlot[] = dataArray.map((s: SlotApi) => ({
         id: s._id || s.id,
+        businessId: s.businessId,
         date: s.date,
         time: s.time,
         duration: s.duration,
@@ -222,13 +250,14 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const createSlot = async (slot: Omit<TimeSlot, "id">): Promise<TimeSlot> => {
     try {
       const token = localStorage.getItem("zarvo_token");
-      const res: AxiosResponse<SlotApi> = await axios.post<SlotApi>(
+      const res = await axios.post<SlotApi>(
         `${API_URL}/slots`,
         slot,
         token ? { headers: { Authorization: `Bearer ${token}` } } : {}
       );
       const newSlot: TimeSlot = {
         id: (res.data as SlotApi)._id || (res.data as SlotApi).id!,
+        businessId: (res.data as SlotApi).businessId,
         date: res.data.date,
         time: res.data.time,
         duration: res.data.duration,
@@ -277,7 +306,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const bookSlot = async (slotId: string, customer: Customer): Promise<TimeSlot | undefined> => {
     try {
       const token = localStorage.getItem("zarvo_token");
-      const res: AxiosResponse<{ booking: BookingApi }> = await axios.post<{ booking: BookingApi }>(
+      const res = await axios.post<{ booking: BookingApi }>(
         `${API_URL}/slots/book/${slotId}`,
         {
           slotId,
@@ -330,8 +359,9 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const s = io(SOCKET_URL);
     setSocket(s);
 
-    s.on("slotCreated", (newSlot: TimeSlot) => {
-      setSlots(prev => [...prev, newSlot]);
+    s.on("slotCreated", (_newSlot: any) => {
+      // Re-fetch to respect backend filtering (e.g., only approved providers with doctor profiles)
+      fetchSlots();
     });
 
     s.on("slotUpdated", (updatedSlot: TimeSlot) => {
@@ -374,6 +404,37 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (evt.slotId) {
         setSlots(prev => prev.map(slot => (slot.id === (evt.slotId as any) ? { ...slot, isBooked: false, customer: undefined } : slot)));
       }
+    });
+
+    // Real-time doctor rating updates
+    s.on("doctorRatingUpdated", (evt: { doctorId: string; average: number; count: number }) => {
+      setSlots(prev => prev.map(slot => (
+        slot.businessId && slot.businessId === evt.doctorId
+          ? { ...slot, doctor: { ...slot.doctor, rating: evt.average } }
+          : slot
+      )));
+    });
+
+    // Real-time account status updates for business/doctor users
+    s.on("doctorApproved", (evt: { id: string; email: string; name?: string }) => {
+      try {
+        const local = localStorage.getItem('zarvo_user');
+        const me = local ? JSON.parse(local) : null;
+        if (me && (me.id === evt.id || me.email === evt.email)) {
+          toast({ title: "Account Approved", description: "Your account has been approved. You can now manage your slots." });
+          refreshMe();
+        }
+      } catch {}
+    });
+    s.on("doctorRejected", (evt: { id: string; email: string; name?: string }) => {
+      try {
+        const local = localStorage.getItem('zarvo_user');
+        const me = local ? JSON.parse(local) : null;
+        if (me && (me.id === evt.id || me.email === evt.email)) {
+          toast({ title: "Account Rejected", description: "Your account was rejected. Please contact support or update your profile.", variant: "destructive" });
+          refreshMe();
+        }
+      } catch {}
     });
 
     return () => {

@@ -12,11 +12,13 @@ const fs_1 = __importDefault(require("fs"));
 const axios_1 = __importDefault(require("axios"));
 const db_1 = __importDefault(require("./config/db"));
 const socket_1 = require("./socket");
+const User_1 = __importDefault(require("./models/User"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const bookingRoutes_1 = __importDefault(require("./routes/bookingRoutes"));
 const slotRoutes_1 = __importDefault(require("./routes/slotRoutes"));
 const testEmail_1 = __importDefault(require("./routes/testEmail"));
-// Load environment variables
+const adminRoutes_1 = __importDefault(require("./routes/adminRoutes"));
+// Seed super-admin and admin users at startup
 dotenv_1.default.config({ path: path_1.default.resolve(__dirname, "../.env") });
 // Confirm environment variables
 console.log("PORT:", process.env.PORT || 5000);
@@ -24,15 +26,59 @@ console.log("FRONTEND_URLS:", process.env.FRONTEND_URLS || process.env.FRONTEND_
 console.log("DB URI exists?", !!(process.env.MONGO_URI || process.env.MONGODB_URL));
 // Connect to MongoDB
 (0, db_1.default)();
+// Kick off admin seeding (non-blocking)
+seedAdminUsers();
 const app = (0, express_1.default)();
 const server = http_1.default.createServer(app);
-// Allowed origins for CORS
-const defaultOrigins = ["http://localhost:5173", "http://localhost:8080"];
+// Seed super-admin and admin accounts (runs once if they do not exist)
+async function seedAdminUsers() {
+    try {
+        const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "zarvosuperadmin@gmail.com";
+        const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || "Aa1#Aa1#";
+        const adminEmail = process.env.ADMIN_EMAIL || "zarvoadmin@gmail.com";
+        const adminPassword = process.env.ADMIN_PASSWORD || "Aa1#Aa1#";
+        // Super Admin
+        let superAdmin = await User_1.default.findOne({ email: superAdminEmail });
+        if (!superAdmin) {
+            superAdmin = await User_1.default.create({
+                name: "Super Admin",
+                email: superAdminEmail,
+                password: superAdminPassword,
+                role: "super-admin",
+            });
+            console.log("✅ Seeded super-admin:", superAdminEmail);
+        }
+        // Admin
+        let admin = await User_1.default.findOne({ email: adminEmail });
+        if (!admin) {
+            admin = await User_1.default.create({
+                name: "Admin",
+                email: adminEmail,
+                password: adminPassword,
+                role: "admin",
+            });
+            console.log("✅ Seeded admin:", adminEmail);
+        }
+    }
+    catch (err) {
+        console.error("⚠️ Admin seeding failed:", err);
+    }
+}
+// Allowed origins for CORS/Socket.IO
 const envOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "")
     .split(",")
     .map(o => o.trim())
     .filter(Boolean);
-const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])]; // Ensure both default and env origins are included
+const isProd = process.env.NODE_ENV === 'production';
+const devDefaults = [
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+];
+const allowedOrigins = [...new Set(envOrigins.length > 0 ? (isProd ? envOrigins : [...envOrigins, ...devDefaults]) : (isProd ? [] : devDefaults))];
 // Socket.IO initialization
 (0, socket_1.initIO)(server, allowedOrigins);
 // Middleware
@@ -43,6 +89,7 @@ app.use("/api/auth", authRoutes_1.default);
 app.use("/api/bookings", bookingRoutes_1.default);
 app.use("/api/slots", slotRoutes_1.default);
 app.use("/api/test", testEmail_1.default);
+app.use("/api/admin", adminRoutes_1.default);
 // Health check endpoint
 app.get("/health", (_req, res) => res.send("Server is running ✅"));
 // Serve frontend

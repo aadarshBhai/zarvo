@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Mail, Lock, User, Phone, Eye, EyeOff, Stethoscope, Building } from 'lucide-react';
 
 const Signup = () => {
-  const { user, signup, isLoading } = useAuth();
+  const { user, signup, login, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [formData, setFormData] = useState({
@@ -28,8 +28,31 @@ const Signup = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
 
-  if (user) {
-    return <Navigate to="/" replace />;
+  // If user is already logged in, normally we would redirect.
+  // But when arriving from Google verification, allow completing the profile form.
+  const tsStr = typeof window !== 'undefined' ? localStorage.getItem('zarvo_google_verified_at') : null;
+  const allowBecauseOfGoogle = (() => {
+    if (!tsStr) return false;
+    const ts = Number(tsStr);
+    if (Number.isNaN(ts)) return false;
+    // 10 minutes window after Google login
+    return Date.now() - ts <= 10 * 60 * 1000;
+  })();
+
+  if (user && !allowBecauseOfGoogle) {
+    const target = (() => {
+      switch (user.role) {
+        case 'business':
+        case 'doctor':
+          return '/business-dashboard';
+        case 'admin':
+          return '/admin-dashboard';
+        case 'customer':
+        default:
+          return '/book-slot';
+      }
+    })();
+    return <Navigate to={target} replace />;
   }
 
   // Healthcare-focused departments for business (doctor) signup
@@ -94,17 +117,36 @@ const Signup = () => {
       });
 
       toast({
-        title: "Account created! Verify your email",
-        description: "We've sent a 6-digit code to your email. Enter it to activate your account.",
+        title: "Account created!",
+        description: "You can now sign in to your account.",
       });
 
-      // Redirect to email verification page
-      navigate('/verify-email', { state: { email: formData.email } });
+      // Auto-login the user with the credentials they just set so route guards allow dashboards
+      try {
+        await login(formData.email, formData.password);
+      } catch (e) {
+        // If auto-login fails (e.g., email verification required), proceed without blocking and let guards handle UX
+      }
+
+      // Clear the Google verification flag now that profile is completed
+      try { localStorage.removeItem('zarvo_google_verified_at'); } catch {}
+
+      // Redirect to respective dashboard based on chosen role
+      const role = formData.role as UserRole;
+      if (role === 'business' || role === 'doctor') {
+        navigate('/business-dashboard');
+      } else {
+        // default customer/guest flow
+        navigate('/book-slot');
+      }
     } catch (error: any) {
-      const message = error?.message || 'Failed to create account. Please try again.';
+      const isConflict = Number(error?.code) === 409;
+      const message = isConflict
+        ? 'This email is already registered. Please sign in with your account.'
+        : (error?.message || 'Failed to create account. Please try again.');
       setError(message);
       toast({
-        title: "Signup failed",
+        title: isConflict ? 'Email already exists' : 'Signup failed',
         description: message,
         variant: "destructive",
       });
@@ -149,7 +191,7 @@ const Signup = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="customer">Guest (Book appointments)</SelectItem>
-                    <SelectItem value="business">BProfessional (Provide services)</SelectItem>
+                    <SelectItem value="business">Business Professional (Provide services)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -304,14 +346,7 @@ const Signup = () => {
             </CardContent>
           </form>
 
-          <CardFooter>
-            <div className="text-sm text-center w-full">
-              <span className="text-muted-foreground">Already have an account? </span>
-              <Link to="/login" className="text-primary hover:underline font-medium">
-                Sign in
-              </Link>
-            </div>
-          </CardFooter>
+          
         </Card>
       </div>
     </div>

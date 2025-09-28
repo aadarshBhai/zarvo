@@ -7,20 +7,21 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { BookingProvider } from "@/contexts/BookingContext";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-
+import RequireSignup from "@/components/routes/RequireSignup";
+import RequireProfileComplete from "@/components/routes/RequireProfileComplete";
+import RequireApproval from "@/components/routes/RequireApproval";
 import Index from "./pages/Index";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import AdminLogin from "./pages/auth/AdminLogin";
-import VerifyEmail from "./pages/auth/VerifyEmail";
 
 import BookSlot from "./pages/customer/BookSlot";
 import MyBookings from "./pages/customer/MyBookings";
-import BusinessDashboard from "./pages/business/BusinessDashboard";
 import ManageSlots from "./pages/business/ManageSlots";
 import ViewBookings from "./pages/business/ViewBookings";
+import BusinessDashboard from "./pages/business/BusinessDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UserManagement from "./pages/admin/UserManagement";
 import Settings from "./pages/admin/Settings";
@@ -36,7 +37,6 @@ const App = () => (
         <BookingProvider>
           <Toaster />
           <Sonner />
-          {/* Suppress React Router v7 deprecation warnings by opting into future flags */}
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <div className="min-h-screen flex flex-col">
               <Navbar />
@@ -48,17 +48,16 @@ const App = () => (
                   <Route path="/signup" element={<Signup />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password/:token" element={<ResetPassword />} />
-                  <Route path="/verify-email" element={<VerifyEmail />} />
 
-                  <Route path="/book-slot" element={<BookSlot />} />
-                  <Route path="/my-bookings" element={<MyBookings />} />
-                  <Route path="/business-dashboard" element={<BusinessDashboard />} />
-                  <Route path="/manage-slots" element={<ManageSlots />} />
-                  <Route path="/view-bookings" element={<ViewBookings />} />
-                  <Route path="/admin-dashboard" element={<AdminDashboard />} />
-                  <Route path="/user-management" element={<UserManagement />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/book-slot" element={<RequireProfileComplete><BookSlot /></RequireProfileComplete>} />
+                  <Route path="/my-bookings" element={<RequireProfileComplete><MyBookings /></RequireProfileComplete>} />
+                  <Route path="/business-dashboard" element={<RequireApproval><BusinessDashboard /></RequireApproval>} />
+                  <Route path="/manage-slots" element={<RequireApproval><ManageSlots /></RequireApproval>} />
+                  <Route path="/view-bookings" element={<RequireApproval><ViewBookings /></RequireApproval>} />
+                  <Route path="/admin-dashboard" element={<RequireSignup><AdminDashboard /></RequireSignup>} />
+                  <Route path="/user-management" element={<RequireSignup><UserManagement /></RequireSignup>} />
+                  <Route path="/settings" element={<RequireSignup><Settings /></RequireSignup>} />
+                  <Route path="/profile" element={<RequireProfileComplete><Profile /></RequireProfileComplete>} />
 
                   <Route path="*" element={<NotFound />} />
                 </Routes>

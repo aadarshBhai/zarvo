@@ -33,25 +33,34 @@ const ViewBookings: React.FC = () => {
     refreshBookings();
   }, [getBusinessSlots, refreshBookings]);
 
-  // Filter bookings belonging to this business
-  const businessBookings: Booking[] = bookings.filter((b) =>
-    businessSlots.some((s) => s.id === b.slotId)
-  );
+  // Build a quick lookup for slots by id
+  const slotMap = React.useMemo(() => {
+    const m = new Map<string, TimeSlot>();
+    businessSlots.forEach(s => m.set(s.id, s));
+    return m;
+  }, [businessSlots]);
+
+  // Filter bookings belonging to this business (by matching slotId)
+  const businessBookings: Booking[] = bookings.filter((b) => slotMap.has(b.slotId));
 
   // Apply search & status filter
   const filteredBookings = businessBookings.filter((b) => {
+    const slot = slotMap.get(b.slotId);
     const matchesSearch =
       !searchTerm ||
       b.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.customerEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.department?.toLowerCase().includes(searchTerm.toLowerCase());
+      (b.department?.toLowerCase().includes(searchTerm.toLowerCase()) || slot?.department?.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesStatus = statusFilter === "all" || b.status === statusFilter;
+    // Normalize 'booked' to 'confirmed' for UI filters
+    const normalized = (b.status === 'booked') ? 'confirmed' : (b.status || '');
+    const matchesStatus = statusFilter === "all" || normalized === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const getStatusColor = (status?: string) => {
-    switch (status) {
+    const normalized = (status === 'booked') ? 'confirmed' : status;
+    switch (normalized) {
       case "confirmed":
         return "bg-success text-success-foreground";
       case "cancelled":
@@ -182,16 +191,19 @@ const ViewBookings: React.FC = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredBookings.map((b) => (
+              {filteredBookings.map((b) => {
+                const slot = slotMap.get(b.slotId);
+                const statusLabel = (b.status === 'booked') ? 'Confirmed' : (b.status ? b.status.charAt(0).toUpperCase() + b.status.slice(1) : 'Pending');
+                return (
                 <Card key={b.id} className="shadow-card hover:shadow-elevated transition-smooth">
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
                         <CardTitle className="text-lg">{b.customerName || "Not booked yet"}</CardTitle>
-                        <CardDescription>{b.department || b.doctor?.name || "N/A"}</CardDescription>
+                        <CardDescription>{b.department || slot?.department || b.doctor?.name || "N/A"}</CardDescription>
                       </div>
                       <Badge className={getStatusColor(b.status)}>
-                        {b.status ? b.status.charAt(0).toUpperCase() + b.status.slice(1) : "Pending"}
+                        {statusLabel}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -200,11 +212,11 @@ const ViewBookings: React.FC = () => {
                       <div className="space-y-2 text-sm">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>{b.date ? new Date(b.date).toLocaleDateString() : "-"}</span>
+                          <span>{slot?.date || "-"}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Clock className="h-4 w-4 text-muted-foreground" />
-                          <span>{b.time || "-"} ({b.duration || "-" } mins)</span>
+                          <span>{slot?.time || "-"} ({slot?.duration ?? "-"} mins)</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-muted-foreground" />
@@ -229,7 +241,7 @@ const ViewBookings: React.FC = () => {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              );})}
             </div>
           )}
         </div>

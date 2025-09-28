@@ -3,7 +3,7 @@ import type { Server as HTTPServer } from "http";
 
 let io: Server | null = null;
 
-export function initIO(server: HTTPServer, allowedOrigins: string[]) {
+export function initIO(server: HTTPServer, allowedOrigins: (string | RegExp)[]) {
   io = new Server(server, {
     cors: {
       origin: allowedOrigins,

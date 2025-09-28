@@ -8,5 +8,16 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["server.ts", "config/**/*", "routes/**/*", "models/**/*", "services/**/*"]
+  "include": [
+    "server.ts",
+    "firebaseAdmin.ts",
+    "config/**/*",
+    "routes/**/*",
+    "models/**/*",
+    "controllers/**/*",
+    "middleware/**/*",
+    "utils/**/*",
+    "services/**/*",
+    "socket.ts"
+  ]
 }

@@ -10,7 +10,7 @@ import io from 'socket.io-client';
 import { API_BASE, SOCKET_URL } from '@/config/api';
 
 const AdminDashboard = () => {
-  const { user } = useAuth();
+  const { user, isReady } = useAuth();
   const { slots, bookings } = useBooking();
   const [users, setUsers] = useState<any[]>([]);
   const [pendingDoctors, setPendingDoctors] = useState<any[]>([]);
@@ -42,9 +42,12 @@ const AdminDashboard = () => {
     }
   };
 
-  // Redirect if not admin or super-admin
-  if (!user || (user.role !== 'admin' && user.role !== 'super-admin')) {
-    return <Navigate to="/login" replace />;
+  // Wait for auth hydration before enforcing role-based redirects
+  if (!isReady) return null;
+
+  // Redirect if not admin (send to admin login for clarity)
+  if (!user || user.role !== 'admin') {
+    return <Navigate to="/admin/login" replace />;
   }
 
   // Fetch users and pending doctors

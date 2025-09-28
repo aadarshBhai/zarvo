@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { Booking } from "../models/Booking";  // your Booking model
 import Slot from "../models/slotModel";
-import { sendBookingConfirmation, sendBookingCancellation } from "../services/emailService";
+import { sendBookingConfirmation, sendBookingCancellation, notifyDoctorCancellation } from "../services/emailService";
 import { getIO } from "../socket";
 
 // ✅ Create a new booking
@@ -89,6 +89,18 @@ export const cancelBooking = async (req: Request & { user?: any }, res: Response
       console.log('⚠️ Cancellation email failed to send:', emailError);
     }
 
+    // Notify the doctor/provider about the cancellation (best-effort)
+    try {
+      const notifyResult = await notifyDoctorCancellation(booking, slot);
+      if (notifyResult.success) {
+        console.log('✅ Doctor notified about cancellation');
+      } else {
+        console.log('⚠️ Doctor notification not sent:', notifyResult.error);
+      }
+    } catch (notifyErr) {
+      console.log('⚠️ Doctor notification failed:', notifyErr);
+    }
+
     // Emit realtime event
     try {
       const io = getIO();
@@ -103,9 +115,14 @@ export const cancelBooking = async (req: Request & { user?: any }, res: Response
 };
 
 // ✅ Get all bookings
-export const getBookings = async (_req: Request, res: Response) => {
+export const getBookings = async (req: Request, res: Response) => {
   try {
-    const bookings = await Booking.find().sort({ createdAt: -1 });
+    const includeCancelled = (req.query.includeCancelled as string) === 'true';
+    const baseQuery: any = {};
+    if (!includeCancelled) {
+      baseQuery.status = { $ne: 'cancelled' };
+    }
+    const bookings = await Booking.find(baseQuery).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: bookings });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -113,10 +130,36 @@ export const getBookings = async (_req: Request, res: Response) => {
 };
 
 // ✅ Get bookings for a specific doctor/business
-export const getMyBookings = async (req: Request, res: Response) => {
+export const getMyBookings = async (req: Request & { user?: any }, res: Response) => {
   try {
-    // For now, return all bookings. In a real app, you'd filter by the logged-in user's slots
-    const bookings = await Booking.find().sort({ createdAt: -1 });
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // If the requester is a customer, return only their bookings by email
+    const role = (req.user as any).role || 'customer';
+    const email = (req.user as any).email;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Authenticated user has no email" });
+    }
+
+    let query: any = {};
+    if (role === 'customer') {
+      query = { customerEmail: email };
+    } else {
+      // For doctor/business we would ideally filter by ownership of slots. As a simple heuristic,
+      // filter by doctor.name if it matches the user's name. Adjust as your data model evolves.
+      const name = (req.user as any).name;
+      query = name ? { "doctor.name": name } : {};
+    }
+
+    const includeCancelled = (req.query.includeCancelled as string) === 'true';
+    if (!includeCancelled) {
+      query.status = { $ne: 'cancelled' };
+    }
+
+    const bookings = await Booking.find(query).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: bookings });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

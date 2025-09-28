@@ -42,9 +42,17 @@ const UserSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
+    role: { type: String, enum: ["customer", "business", "doctor", "admin", "super-admin"], default: "customer" },
+    approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" },
+    isApproved: { type: Boolean, default: true },
+    isActive: { type: Boolean, default: true },
+    emailVerified: { type: Boolean, default: false },
+    emailVerificationOTP: { type: String },
+    emailVerificationExpiry: { type: Date },
+    deletedAt: { type: Date, default: null },
     resetToken: { type: String },
     resetTokenExpiry: { type: Date },
-}, { strict: false }); // <- Important: allows saving extra fields
+}, { strict: false, timestamps: true }); // <- Important: allows saving extra fields
 // Hash password before saving
 UserSchema.pre("save", async function (next) {
     if (!this.isModified("password"))

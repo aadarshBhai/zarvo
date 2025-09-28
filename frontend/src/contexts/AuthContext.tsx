@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AUTH_API } from '@/config/api';
 
-export type UserRole = 'customer' | 'business' | 'admin' | 'super-admin';
+export type UserRole = 'customer' | 'business' | 'doctor' | 'admin' | 'super-admin';
 
 export interface User {
   id: string;
@@ -11,6 +11,7 @@ export interface User {
   role: UserRole;
   businessType?: string;
   isApproved?: boolean;
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
 }
 
 export interface AuthContextType {
@@ -21,6 +22,7 @@ export interface AuthContextType {
   deleteAccount: () => Promise<void>;
   verifyEmail: (email: string, otp: string) => Promise<void>;
   resendOtp: (email: string) => Promise<void>;
+  refreshMe: () => Promise<void>;
   isLoading: boolean;
   isReady: boolean;
 }
@@ -43,13 +45,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('zarvo_user');
-    const token = localStorage.getItem('zarvo_token');
-    if (savedUser && token) {
-      setUser(JSON.parse(savedUser));
-    }
-    setIsReady(true);
+    const bootstrap = async () => {
+      const savedUser = localStorage.getItem('zarvo_user');
+      const token = localStorage.getItem('zarvo_token');
+      if (savedUser && token) {
+        // Optimistically set saved user
+        setUser(JSON.parse(savedUser));
+        // Refresh from backend to get latest approval and profile flags
+        try {
+          const res = await fetch(`${API_URL}/me`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.user) {
+              setUser(data.user);
+              localStorage.setItem('zarvo_user', JSON.stringify(data.user));
+              if (data?.user?.role) localStorage.setItem('zarvo_role', data.user.role);
+            }
+          }
+        } catch {}
+      }
+      setIsReady(true);
+    };
+    bootstrap();
   }, []);
+
+  const refreshMe = async () => {
+    const token = localStorage.getItem('zarvo_token');
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/me`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.user) {
+          setUser(data.user);
+          localStorage.setItem('zarvo_user', JSON.stringify(data.user));
+          if (data?.user?.role) localStorage.setItem('zarvo_role', data.user.role);
+        }
+      }
+    } catch {}
+  };
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
@@ -73,6 +113,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Google login removed per request
+
   const signup = async (userData: { name: string; email: string; phone?: string; password: string; role: UserRole; businessType?: string }) => {
     setIsLoading(true);
     try {
@@ -82,7 +124,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify(userData),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Signup failed");
+      if (!res.ok) {
+        const err: any = new Error(data.message || "Signup failed");
+        err.code = res.status;
+        throw err;
+      }
       // Some flows return token immediately; our secured flow requires email verification first.
       if (data?.token && data?.user) {
         setUser(data.user);
@@ -92,7 +138,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return data;
     } catch (error: any) {
-      throw new Error(error.message || "Signup error");
+      const err: any = new Error(error?.message || "Signup error");
+      if (error?.code) err.code = error.code;
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -128,6 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('zarvo_user');
     localStorage.removeItem('zarvo_token');
     localStorage.removeItem('zarvo_role');
+    localStorage.removeItem('zarvo_google_verified_at');
   };
 
   const deleteAccount = async () => {
@@ -159,7 +208,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, deleteAccount, verifyEmail, resendOtp, isLoading, isReady }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, deleteAccount, verifyEmail, resendOtp, refreshMe, isLoading, isReady }}>
       {children}
     </AuthContext.Provider>
   );

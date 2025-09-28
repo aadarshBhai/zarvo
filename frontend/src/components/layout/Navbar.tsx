@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,6 +18,7 @@ import {
 const Navbar = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const getNavItems = () => {
@@ -44,7 +45,6 @@ const Navbar = () => {
           { label: 'Profile', href: '/profile', icon: User }
         ];
       case 'admin':
-      case 'super-admin':
         return [
           { label: 'Admin Dashboard', href: '/admin-dashboard', icon: BarChart3 },
           { label: 'User Management', href: '/user-management', icon: Users },
@@ -64,19 +64,22 @@ const Navbar = () => {
         const isActive = location.pathname === item.href;
         
         return (
-          <Link
-            key={item.href}
-            to={item.href}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-smooth text-sm font-medium ${
-              isActive
-                ? 'bg-primary text-primary-foreground shadow-primary'
-                : 'text-foreground hover:bg-secondary'
-            }`}
-            onClick={() => setIsMobileMenuOpen(false)}
-          >
-            <Icon className="h-4 w-4" />
-            {item.label}
-          </Link>
+          <React.Fragment key={item.href}>
+            {(
+              <Link
+                to={item.href}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-smooth text-sm font-medium ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground shadow-primary'
+                    : 'text-foreground hover:bg-secondary'
+                }`}
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            )}
+          </React.Fragment>
         );
       })}
     </>

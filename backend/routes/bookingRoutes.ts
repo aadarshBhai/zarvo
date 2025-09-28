@@ -27,7 +27,7 @@ router.get("/all", getBookings);
 
 // @route   GET /api/bookings/my-bookings
 // @desc    Get bookings for the logged-in doctor/business
-router.get("/my-bookings", getMyBookings);
+router.get("/my-bookings", protect, getMyBookings);
 
 // @route   GET /api/bookings/:id
 // @desc    Get a single booking by ID

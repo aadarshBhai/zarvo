@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import QRCode from "qrcode";
 import { API_BASE } from "@/config/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Booking {
   _id: string;
@@ -29,27 +30,49 @@ const MyBookings: React.FC = () => {
   const [qrCodes, setQrCodes] = useState<{ [key: string]: string }>({});
   const [message, setMessage] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const res = await axios.get(`${API_URL}/bookings/my-bookings`);
-        setBookings(res.data.data || []);
+        const token = localStorage.getItem("zarvo_token");
+        if (!token || !user?.email) {
+          setBookings([]);
+          setError(token ? "" : "Please sign in to view your bookings.");
+          return;
+        }
+
+        const res = await axios.get<{ data: Booking[] } | Booking[]>(
+          `${API_URL}/bookings/my-bookings`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        const list: Booking[] = Array.isArray((res.data as any)?.data)
+          ? (res.data as { data: Booking[] }).data
+          : (Array.isArray(res.data) ? (res.data as Booking[]) : []);
+        // Defensive filter: ensure only bookings belonging to the current user are shown
+        const mine = user?.email ? list.filter(b => b.customerEmail === user.email) : [];
+        setBookings(mine);
 
         // Generate QR codes
-        (res.data.data || []).forEach(async (booking: Booking) => {
+        list.forEach(async (booking: Booking) => {
           const text = `Doctor: ${booking.doctor.name}\nLocation: ${booking.doctor.location}\nBooking: ${booking.bookingNumber}\nFee: ₹${booking.fee}\nStatus: ${booking.status}`;
           const qr = await QRCode.toDataURL(text);
           setQrCodes(prev => ({ ...prev, [booking._id]: qr }));
         });
       } catch (err: any) {
         console.error(err);
-        setError(err?.response?.data?.message || "Failed to load bookings");
+        if (err?.response?.status === 401) {
+          setError("Please sign in to view your bookings.");
+        } else {
+          setError(err?.response?.data?.message || "Failed to load bookings");
+        }
       }
     };
 
     fetchBookings();
-  }, []);
+  }, [API_URL, user?.email]);
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -57,10 +80,10 @@ const MyBookings: React.FC = () => {
       {message && <div className="mb-3 text-green-600">{message}</div>}
       {error && <div className="mb-3 text-red-600">{error}</div>}
 
-      {bookings.length === 0 && <p>No bookings yet.</p>}
+      {bookings.filter(b => b.status !== 'cancelled').length === 0 && !error && <p>No bookings yet.</p>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {bookings.map(booking => (
+        {bookings.filter(b => b.status !== 'cancelled').map(booking => (
           <div key={booking._id} className="border p-4 rounded shadow">
             <p><strong>Doctor:</strong> {booking.doctor.name}</p>
             <p><strong>Location:</strong> {booking.doctor.location}</p>
@@ -88,8 +111,8 @@ const MyBookings: React.FC = () => {
                       {},
                       token ? { headers: { Authorization: `Bearer ${token}` } } : {}
                     );
-                    // update locally
-                    setBookings(prev => prev.map(b => b._id === booking._id ? { ...b, status: 'cancelled' } : b));
+                    // remove locally so it disappears immediately
+                    setBookings(prev => prev.filter(b => b._id !== booking._id));
                     setMessage("Booking cancelled successfully");
                   } catch (err: any) {
                     const msg = err?.response?.data?.message || "Failed to cancel booking";

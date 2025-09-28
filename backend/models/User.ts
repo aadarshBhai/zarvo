@@ -11,7 +11,7 @@ export interface IUser extends Document {
   emailVerified?: boolean;
   emailVerificationOTP?: string;
   emailVerificationExpiry?: Date;
-  role?: "customer" | "business" | "doctor" | "admin" | "super-admin";
+  role?: "customer" | "business" | "doctor" | "admin";
   // approvalStatus is for business/doctor accounts: 'pending' | 'approved' | 'rejected'
   approvalStatus?: string;
   isApproved?: boolean; // derived convenience flag
@@ -24,7 +24,7 @@ const UserSchema: Schema<IUser> = new Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ["customer", "business", "doctor", "admin", "super-admin"], default: "customer" },
+  role: { type: String, enum: ["customer", "business", "doctor", "admin"], default: "customer" },
   approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" },
   isApproved: { type: Boolean, default: true },
   isActive: { type: Boolean, default: true },

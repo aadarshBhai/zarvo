@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { AUTH_API } from "@/config/api";
 
 const ResetPassword = () => {
   const { token } = useParams<{ token: string }>();
@@ -24,22 +25,33 @@ const ResetPassword = () => {
 
     try {
       setLoading(true);
-
-      // ✅ Updated API URL
-      const API_BASE = import.meta.env.VITE_API_URL; // use VITE_API_URL for auth APIs
-
-const res = await fetch(`${API_BASE}/reset-password`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ token, password }),
-});
-
-
+      const res = await fetch(`${AUTH_API}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed");
 
+      // Save user and token to log the user in immediately after reset
+      if (data?.user && data?.token) {
+        try {
+          localStorage.setItem('zarvo_user', JSON.stringify(data.user));
+          localStorage.setItem('zarvo_token', data.token);
+          if (data?.user?.role) localStorage.setItem('zarvo_role', data.user.role);
+        } catch {}
+      }
+
       toast({ title: "Success", description: data.message });
-      navigate("/login");
+      // Redirect to the appropriate dashboard
+      const role = data?.user?.role as string | undefined;
+      if (role === 'business' || role === 'doctor') {
+        navigate('/business-dashboard');
+      } else if (role === 'admin') {
+        navigate('/admin-dashboard');
+      } else {
+        navigate('/book-slot');
+      }
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {

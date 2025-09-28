@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import { Mail, Lock, Eye, EyeOff, Stethoscope } from 'lucide-react';
 
 const Login = () => {
   const { user, login, isLoading } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     email: '',
@@ -19,19 +20,10 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  // Redirect if already logged in
-  if (user) {
-    switch (user.role) {
-      case 'customer':
-        return <Navigate to="/book-slot" replace />;
-      case 'business':
-        return <Navigate to="/business-dashboard" replace />;
-      case 'admin':
-        return <Navigate to="/admin-dashboard" replace />;
-      default:
-        return <Navigate to="/" replace />;
-    }
-  }
+  // Use Google popup on demand
+
+  // Do not auto-redirect; if the user is already logged in and chose Login explicitly,
+  // show the form so they can switch accounts or log in again.
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +40,17 @@ const Login = () => {
         title: "Login successful",
         description: "Welcome back to Zarvo!",
       });
+      // Redirect to the appropriate dashboard
+      const saved = localStorage.getItem('zarvo_user');
+      const parsed = saved ? JSON.parse(saved) : null;
+      const role = parsed?.role as string | undefined;
+      if (role === 'business' || role === 'doctor') {
+        navigate('/business-dashboard');
+      } else if (role === 'admin') {
+        navigate('/admin-dashboard');
+      } else {
+        navigate('/book-slot');
+      }
     } catch (error) {
       setError('Invalid email or password');
       toast({
@@ -146,9 +149,7 @@ const Login = () => {
           <CardFooter className="flex flex-col space-y-2">
             <div className="text-sm text-center">
               <span className="text-muted-foreground">Don't have an account? </span>
-              <Link to="/signup" className="text-primary hover:underline font-medium">
-                Sign up
-              </Link>
+              <Link to="/signup" className="text-primary hover:underline font-medium">Sign up</Link>
             </div>
             <div className="text-sm text-center">
               <Link to="/forgot-password" className="text-muted-foreground hover:text-primary transition-smooth">

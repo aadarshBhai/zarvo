@@ -22,7 +22,8 @@ const ManageSlots = () => {
   const [businessSlotsState, setBusinessSlotsState] = useState<any[]>([]);
   const [newSlot, setNewSlot] = useState({
     date: '',
-    time: '',
+    time: '', // stored as 24h (HH:mm) for backend compatibility
+    time12: '', // UI input in 12-hour format
     duration: 30,
     department: '',
     departmentOther: '',
@@ -31,6 +32,20 @@ const ManageSlots = () => {
     doctorRating: 5,
     doctorLocation: ''
   });
+
+  // Precompute 12-hour time options (every 15 minutes across the day)
+  const timeOptions12h = React.useMemo(() => {
+    const opts: string[] = [];
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m += 15) {
+        const hour12 = ((h + 11) % 12) + 1; // 0->12, 13->1
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const mm = String(m).padStart(2, '0');
+        opts.push(`${hour12}:${mm} ${ampm}`);
+      }
+    }
+    return opts;
+  }, []);
 
   useEffect(() => {
     if (user?.id) {
@@ -46,6 +61,35 @@ const ManageSlots = () => {
       fetchSlots();
     }
   }, [user, getBusinessSlots]);
+
+  // ---- Time helpers ----
+  const to24h = (time12: string): string | null => {
+    // Accept formats like "2:30 PM", "02:30 pm", "12:05 am"
+    const m = time12.trim().match(/^\s*(\d{1,2}):(\d{2})\s*([AaPp][Mm])\s*$/);
+    if (!m) return null;
+    let hour = parseInt(m[1], 10);
+    const min = m[2];
+    const ampm = m[3].toUpperCase();
+    if (hour < 1 || hour > 12) return null;
+    if (ampm === 'AM') {
+      hour = hour === 12 ? 0 : hour;
+    } else {
+      hour = hour === 12 ? 12 : hour + 12;
+    }
+    const hh = String(hour).padStart(2, '0');
+    return `${hh}:${min}`;
+  };
+
+  const to12h = (time24: string): string => {
+    const m = time24.match(/^(\d{2}):(\d{2})$/);
+    if (!m) return time24;
+    let hour = parseInt(m[1], 10);
+    const min = m[2];
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12;
+    if (hour === 0) hour = 12;
+    return `${hour}:${min} ${ampm}`;
+  };
 
   if (!isReady) {
     // Wait for auth hydration to prevent redirect flicker on refresh
@@ -97,7 +141,11 @@ const ManageSlots = () => {
   };
 
   const handleCreateSlot = async () => {
-    if (!newSlot.date || !newSlot.time || !newSlot.department || !newSlot.doctorName || !newSlot.doctorLocation) {
+    // Convert 12h input to 24h before validation
+    const converted = to24h(newSlot.time12 || '');
+    const time24 = converted || newSlot.time; // allow existing value if provided
+
+    if (!newSlot.date || !time24 || !newSlot.department || !newSlot.doctorName || !newSlot.doctorLocation) {
       toast({
         title: "Missing information",
         description: "Please fill in all required fields.",
@@ -140,7 +188,7 @@ const ManageSlots = () => {
 
       const slotPayload = {
         date: newSlot.date,
-        time: newSlot.time,
+        time: time24,
         duration: newSlot.duration,
         department: chosenDepartment,
         price: newSlot.price,
@@ -161,6 +209,7 @@ const ManageSlots = () => {
       setNewSlot({
         date: '',
         time: '',
+        time12: '',
         duration: 30,
         department: '',
         departmentOther: '',
@@ -175,10 +224,11 @@ const ManageSlots = () => {
         doctor: createdSlot.doctor || { name: 'Unknown Doctor', location: 'Unknown', rating: 0 },
       }]);
     } catch (error) {
-      console.error("Error creating slot:", error);
+      const msg = (error as any)?.response?.data?.message || (error as any)?.message || "Failed to create slot";
+      console.error("Error creating slot:", (error as any)?.response?.data || error);
       toast({
         title: "Failed to create slot",
-        description: "Please try again.",
+        description: msg,
         variant: "destructive",
       });
     } finally {
@@ -238,13 +288,20 @@ const ManageSlots = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="time">Time *</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={newSlot.time}
-                    onChange={(e) => setNewSlot({ ...newSlot, time: e.target.value })}
-                  />
+                  <Label htmlFor="time12">Time *</Label>
+                  <Select
+                    value={newSlot.time12}
+                    onValueChange={(value) => setNewSlot({ ...newSlot, time12: value })}
+                  >
+                    <SelectTrigger id="time12" name="time12">
+                      <SelectValue placeholder="Select time" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      {timeOptions12h.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -277,34 +334,25 @@ const ManageSlots = () => {
                   )}
                 </div>
 
-                {newSlot.department && (
-                  <div className="space-y-2">
-                    <Label htmlFor="duration">Duration (minutes)</Label>
-                    <Select
-                      value={newSlot.duration.toString()}
-                      onValueChange={(value) => setNewSlot({ ...newSlot, duration: parseInt(value) })}
-                    >
-                      <SelectTrigger id="duration" name="duration">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getDurationOptions(newSlot.department).map((duration) => (
-                          <SelectItem key={duration} value={duration.toString()}>
-                            {duration} minutes
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="duration">Duration (minutes)</Label>
+                  <Input
+                    id="duration"
+                    type="number"
+                    min="5"
+                    step="5"
+                    value={newSlot.duration}
+                    onChange={(e) => setNewSlot({ ...newSlot, duration: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price ($)</Label>
+                  <Label htmlFor="price">Price (₹)</Label>
                   <Input
                     id="price"
                     type="number"
                     min="0"
-                    step="10"
+                    step="50"
                     value={newSlot.price}
                     onChange={(e) => setNewSlot({ ...newSlot, price: parseInt(e.target.value) || 0 })}
                   />
@@ -339,16 +387,18 @@ const ManageSlots = () => {
                       min="0"
                       max="5"
                       step="0.5"
-                      value={newSlot.doctorRating}
-                      onChange={(e) => setNewSlot({ ...newSlot, doctorRating: parseFloat(e.target.value) })}
-                      className="w-20 text-center font-bold text-lg"
-                    />
+                      value={Number.isFinite(newSlot.doctorRating as any) ? newSlot.doctorRating : 0}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setNewSlot({ ...newSlot, doctorRating: Number.isFinite(v) ? v : 0 });
+                    }}
+                    className="w-20 text-center font-bold text-lg"
+                  />
                     <span className="text-yellow-500 text-lg">★</span>
                     <span className="text-muted-foreground text-sm">(0-5)</span>
                   </div>
                 </div>
               </div>
-
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancel
@@ -378,11 +428,11 @@ const ManageSlots = () => {
                   <CardHeader>
                     <CardTitle>{slot.department}</CardTitle>
                     <CardDescription>
-                      {slot.date} at {slot.time} | {slot.duration} minutes
+                      {slot.date} at {to12h(slot.time)} | {slot.duration} minutes
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <p><strong>Price:</strong> ${slot.price}</p>
+                    <p><strong>Price:</strong> ₹{slot.price}</p>
                     <p><strong>Doctor:</strong> {doctor.name}</p>
                     <p><strong>Location:</strong> {doctor.location}</p>
                     <p><strong>Rating:</strong> {doctor.rating}★</p>

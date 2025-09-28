@@ -1,5 +1,5 @@
 import express from "express";
-import { signup, login, forgotPassword, resetPassword, deleteAccount, updateMe, verifyEmail, resendOtp } from "../controllers/authController";
+import { signup, login, forgotPassword, resetPassword, deleteAccount, updateMe, verifyEmail, resendOtp, getMe } from "../controllers/authController";
 import { protect } from "../middleware/authMiddleware";
 import { verifyCaptcha } from "../middleware/captchaMiddleware";
 import { signupLimiter, otpLimiter } from "../middleware/rateLimit";
@@ -16,5 +16,6 @@ router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 router.delete("/delete-account", protect, deleteAccount);
 router.put("/me", protect, updateMe);
+router.get("/me", protect, getMe);
 
 export default router;

@@ -1,8 +1,13 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteBooking = exports.updateBooking = exports.getBookingById = exports.getMyBookings = exports.getBookings = exports.createBooking = void 0;
+exports.deleteBooking = exports.updateBooking = exports.getBookingById = exports.getMyBookings = exports.getBookings = exports.cancelBooking = exports.createBooking = void 0;
 const Booking_1 = require("../models/Booking"); // your Booking model
+const slotModel_1 = __importDefault(require("../models/slotModel"));
 const emailService_1 = require("../services/emailService");
+const socket_1 = require("../socket");
 // ✅ Create a new booking
 const createBooking = async (req, res) => {
     try {
@@ -32,6 +37,70 @@ const createBooking = async (req, res) => {
     }
 };
 exports.createBooking = createBooking;
+// ✅ Cancel booking (customer-initiated) with 2-hour cutoff
+const cancelBooking = async (req, res) => {
+    try {
+        const booking = await Booking_1.Booking.findById(req.params.id);
+        if (!booking) {
+            return res.status(404).json({ success: false, message: "Booking not found" });
+        }
+        // Optional: verify ownership by email if authenticated
+        if (req.user?.email && booking.customerEmail && req.user.email !== booking.customerEmail) {
+            return res.status(403).json({ success: false, message: "You are not allowed to cancel this booking" });
+        }
+        // Get slot info to determine start time
+        const slot = await slotModel_1.default.findById(booking.slotId);
+        if (!slot) {
+            return res.status(404).json({ success: false, message: "Related slot not found" });
+        }
+        // Parse slot date and time to Date object (assuming slot.date like YYYY-MM-DD and slot.time like HH:mm)
+        const slotStart = new Date(`${slot.date}T${slot.time}:00`);
+        if (isNaN(slotStart.getTime())) {
+            return res.status(400).json({ success: false, message: "Invalid slot date/time" });
+        }
+        const now = new Date();
+        const twoHoursMs = 2 * 60 * 60 * 1000;
+        if (now.getTime() > slotStart.getTime() - twoHoursMs) {
+            return res.status(400).json({ success: false, message: "Cancellation is only allowed up to 2 hours before the appointment" });
+        }
+        if (booking.status === "cancelled") {
+            return res.status(200).json({ success: true, message: "Booking already cancelled" });
+        }
+        // Mark booking as cancelled
+        booking.status = "cancelled";
+        await booking.save();
+        // Release the slot
+        if (slot.isBooked) {
+            slot.isBooked = false;
+            await slot.save();
+        }
+        // Send cancellation email (best-effort)
+        try {
+            const emailResult = await (0, emailService_1.sendBookingCancellation)(booking);
+            if (emailResult.success) {
+                console.log('✅ Booking cancellation email sent successfully');
+            }
+            else {
+                console.log('⚠️ Cancellation email failed to send:', emailResult.error);
+            }
+        }
+        catch (emailError) {
+            console.log('⚠️ Cancellation email failed to send:', emailError);
+        }
+        // Emit realtime event
+        try {
+            const io = (0, socket_1.getIO)();
+            io.emit("bookingCancelled", { id: booking.id, slotId: booking.slotId });
+        }
+        catch { }
+        return res.status(200).json({ success: true, message: "Booking cancelled" });
+    }
+    catch (error) {
+        console.error("Cancel booking error:", error);
+        return res.status(500).json({ success: false, message: error.message || "Server error" });
+    }
+};
+exports.cancelBooking = cancelBooking;
 // ✅ Get all bookings
 const getBookings = async (_req, res) => {
     try {
@@ -97,6 +166,15 @@ const deleteBooking = async (req, res) => {
         if (!booking) {
             return res.status(404).json({ success: false, message: "Booking not found" });
         }
+        // Release the slot if currently booked
+        try {
+            const slot = await slotModel_1.default.findById(booking.slotId);
+            if (slot && slot.isBooked) {
+                slot.isBooked = false;
+                await slot.save();
+            }
+        }
+        catch { }
         // Send cancellation email to customer before deleting
         try {
             const emailResult = await (0, emailService_1.sendBookingCancellation)(booking);
@@ -112,6 +190,12 @@ const deleteBooking = async (req, res) => {
         }
         // Delete the booking
         await Booking_1.Booking.findByIdAndDelete(req.params.id);
+        // Emit realtime event so clients update immediately
+        try {
+            const io = (0, socket_1.getIO)();
+            io.emit("bookingCancelled", { id: booking.id, slotId: booking.slotId });
+        }
+        catch { }
         res.status(200).json({ success: true, message: "Booking deleted successfully and cancellation email sent" });
     }
     catch (error) {

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // routes/bookingRoutes.ts
 const express_1 = require("express");
 const bookingController_1 = require("../controllers/bookingController");
+const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
 // @route   POST /api/bookings
 // @desc    Create a new booking
@@ -25,4 +26,7 @@ router.put("/:id", bookingController_1.updateBooking);
 // @route   DELETE /api/bookings/:id
 // @desc    Delete a booking
 router.delete("/:id", bookingController_1.deleteBooking);
+// @route   POST /api/bookings/:id/cancel
+// @desc    Customer cancels a booking (server enforces 2-hour cutoff)
+router.post("/:id/cancel", authMiddleware_1.protect, bookingController_1.cancelBooking);
 exports.default = router;

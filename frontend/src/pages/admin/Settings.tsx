@@ -11,8 +11,8 @@ import { Settings as SettingsIcon, Save, RefreshCw } from 'lucide-react';
 const Settings = () => {
   const { user } = useAuth();
 
-  // Guard: only admin or super-admin can access
-  if (!user || (user.role !== 'admin' && user.role !== 'super-admin')) {
+  // Guard: only admin can access
+  if (!user || user.role !== 'admin') {
     return <Navigate to="/login" replace />;
   }
 

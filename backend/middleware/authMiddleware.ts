@@ -14,7 +14,11 @@ export const protect = async (req: Request & { user?: any }, res: Response, next
     try {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload;
-      req.user = await User.findById(decoded.id).select("-password");
+      const user = await User.findById(decoded.id).select("-password");
+      if (!user) {
+        return res.status(401).json({ message: "Not authorized, user not found" });
+      }
+      req.user = user;
       next();
     } catch (error) {
       res.status(401).json({ message: "Not authorized, token failed" });
@@ -26,12 +30,6 @@ export const protect = async (req: Request & { user?: any }, res: Response, next
 
 export const isAdmin = (req: Request & { user?: any }, res: Response, next: NextFunction) => {
   const role = req.user?.role;
-  if (role === 'admin' || role === 'super-admin') return next();
+  if (role === 'admin') return next();
   return res.status(403).json({ message: 'Admin access required' });
-};
-
-export const isSuperAdmin = (req: Request & { user?: any }, res: Response, next: NextFunction) => {
-  const role = req.user?.role;
-  if (role === 'super-admin') return next();
-  return res.status(403).json({ message: 'Super-admin access required' });
 };

@@ -37,6 +37,13 @@ const BusinessDashboard = () => {
     businessSlots.some(s => s.id === b.slotId)
   );
 
+  // Quick slot lookup
+  const slotMap = React.useMemo(() => {
+    const m = new Map<string, any>();
+    businessSlots.forEach((s: any) => m.set(s.id, s));
+    return m;
+  }, [businessSlots]);
+
   const stats = {
     totalSlots: businessSlots.length,
     bookedSlots: businessSlots.filter(s => s.isBooked).length,
@@ -178,33 +185,36 @@ const BusinessDashboard = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {recentBookings.map((booking) => (
-                  <div key={booking.bookingNumber || booking.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="space-y-1">
-                      <div className="font-medium">{booking.customerName}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {booking.department} • {new Date(booking.date).toLocaleDateString()} at {booking.time}
+                {recentBookings.map((booking) => {
+                  const slot = slotMap.get(booking.slotId);
+                  const dept = booking.department || slot?.department || 'N/A';
+                  const dateStr = slot?.date || '-';
+                  const timeStr = slot?.time || '-';
+                  const statusNorm = booking.status === 'booked' ? 'confirmed' : booking.status;
+                  const badgeClass = statusNorm === 'confirmed' 
+                    ? 'bg-success text-success-foreground' 
+                    : statusNorm === 'cancelled' 
+                      ? 'bg-destructive text-destructive-foreground' 
+                      : 'bg-muted text-muted-foreground';
+                  const statusLabel = statusNorm ? statusNorm.charAt(0).toUpperCase() + statusNorm.slice(1) : 'Pending';
+                  return (
+                    <div key={booking.bookingNumber || booking.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="space-y-1">
+                        <div className="font-medium">{booking.customerName}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {dept} • {dateStr} at {timeStr}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{booking.customerEmail}</div>
                       </div>
-                      <div className="text-xs text-muted-foreground">{booking.customerEmail}</div>
-                    </div>
-                    <div className="text-right">
-                      <Badge 
-                        className={
-                          booking.status === 'confirmed' 
-                            ? 'bg-success text-success-foreground' 
-                            : booking.status === 'cancelled'
-                            ? 'bg-destructive text-destructive-foreground'
-                            : 'bg-muted text-muted-foreground'
-                        }
-                      >
-                        {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                      </Badge>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {new Date(booking.createdAt).toLocaleDateString()}
+                      <div className="text-right">
+                        <Badge className={badgeClass}>{statusLabel}</Badge>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          {new Date(booking.createdAt).toLocaleDateString()}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

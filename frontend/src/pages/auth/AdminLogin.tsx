@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, ShieldCheck } from "lucide-react";
+import { AlertCircle, ShieldCheck, Eye, EyeOff } from "lucide-react";
 
 const AdminLogin: React.FC = () => {
   const { user, login, logout, isLoading } = useAuth();
@@ -12,9 +12,10 @@ const AdminLogin: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  // If already authenticated and is admin/super-admin, go to dashboard
-  if (user && (user.role === "admin" || user.role === "super-admin")) {
+  // If already authenticated and is admin, go to dashboard
+  if (user && user.role === "admin") {
     return <Navigate to="/admin-dashboard" replace />;
   }
 
@@ -28,7 +29,7 @@ const AdminLogin: React.FC = () => {
       const saved = localStorage.getItem("zarvo_user");
       const parsed = saved ? JSON.parse(saved) : null;
       const role = parsed?.role;
-      if (role === "admin" || role === "super-admin") {
+      if (role === "admin") {
         navigate("/admin-dashboard", { replace: true });
       } else {
         // Not an admin: log out and show error
@@ -50,7 +51,7 @@ const AdminLogin: React.FC = () => {
             </div>
             <div>
               <CardTitle>Admin Login</CardTitle>
-              <CardDescription>Restricted area. Admins and Super Admins only.</CardDescription>
+              <CardDescription>Restricted area. Admins only.</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -78,15 +79,28 @@ const AdminLogin: React.FC = () => {
 
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium">Password</label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className="pr-10"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1 h-8 w-8 p-0"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>

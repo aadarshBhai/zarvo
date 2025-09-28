@@ -11,6 +11,46 @@ const createTransporter = () => {
   });
 };
 
+// Notify doctor/provider about a customer cancellation
+export const notifyDoctorCancellation = async (booking: any, slot: any) => {
+  try {
+    const transporter = createTransporter();
+
+    const to = slot?.doctor?.email || slot?.doctor?.contactEmail;
+    if (!to) {
+      // No doctor email available, skip silently
+      return { success: false, error: 'No doctor email available' };
+    }
+
+    const mailOptions = {
+      from: `"Zarvo Healthcare" <${process.env.EMAIL_USER || 'noreply@zarvo.com'}>`,
+      to,
+      subject: `🛑 Patient Cancelled - Ticket #${booking.bookingNumber}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #dc3545;">Appointment Cancelled by Patient</h2>
+          <p>Dear ${slot?.doctor?.name || 'Provider'},</p>
+          <p>The following booking has been cancelled by the patient.</p>
+          <div style="background:#f8f9fa; padding: 16px; border-radius: 8px; border:1px solid #eee;">
+            <p><strong>Ticket:</strong> ${booking.bookingNumber}</p>
+            <p><strong>Patient:</strong> ${booking.customerName} (${booking.customerEmail}, ${booking.customerPhone})</p>
+            <p><strong>Status:</strong> ${booking.status}</p>
+          </div>
+          <p style="color:#555; font-size:14px;">You may wish to free up this slot for other patients if not already done.</p>
+          <p>Regards,<br/>Zarvo</p>
+        </div>
+      `,
+    } as any;
+
+    const result = await transporter.sendMail(mailOptions);
+    console.log('✅ Doctor cancellation email sent successfully:', result.messageId);
+    return { success: true, messageId: result.messageId };
+  } catch (error) {
+    console.error('❌ Error sending doctor cancellation email:', error);
+    return { success: false, error };
+  }
+};
+
 // Email template for booking confirmation
 const createBookingEmailTemplate = (booking: any) => {
   return `
@@ -177,5 +217,6 @@ export const sendBookingCancellation = async (booking: any) => {
 
 export default {
   sendBookingConfirmation,
-  sendBookingCancellation
+  sendBookingCancellation,
+  notifyDoctorCancellation
 };
