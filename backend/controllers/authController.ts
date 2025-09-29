@@ -306,7 +306,7 @@ export const login = async (req: Request, res: Response) => {
         isApproved: (user as any).isApproved,
         emailVerified: (user as any).emailVerified,
       },
-      token: generateToken(user._id.toString(), (user as any).role || 'customer'),
+      token: generateToken(String((user as any)._id), (user as any).role || 'customer'),
     });
   } catch (error) {
     console.error("Login error:", error);
