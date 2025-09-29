@@ -15,7 +15,8 @@ import {
   Heart,
   Eye,
   Smile,
-  Activity
+  Activity,
+  MessageCircle
 } from 'lucide-react';
 
 const Index = () => {
@@ -150,7 +151,22 @@ const Index = () => {
               Connect with trusted healthcare professionals and book appointments instantly. 
               Your health journey simplified.
             </p>
-            
+            {/* WhatsApp CTA */}
+            <div className="flex items-center justify-center gap-3">
+              <a
+                href={
+                  `https://wa.me/918738030604?text=${encodeURIComponent(
+                    'Hi, I would like to upload my report and get real-time suggestions.'
+                  )}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-medium shadow-lg transition-colors"
+              >
+                <MessageCircle className="w-5 h-5" />
+                Chat on WhatsApp (+91 87380 30604)
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -234,6 +250,22 @@ const Index = () => {
       </section>
 
       
+      {/* Floating WhatsApp Button */}
+      <a
+        href={
+          `https://wa.me/918738030604?text=${encodeURIComponent(
+            'Hi, I would like to upload my report and get real-time suggestions.'
+          )}`
+        }
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 z-50 inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-xl transition-transform hover:scale-105"
+        aria-label="Chat on WhatsApp"
+        title="Chat on WhatsApp"
+      >
+        <MessageCircle className="w-7 h-7" />
+      </a>
+
     </div>
   );
 };
