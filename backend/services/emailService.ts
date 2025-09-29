@@ -1,14 +1,13 @@
-import { MailerSend, EmailParams, Recipient, Sender, Attachment } from 'mailersend';
+import { MailerSend, EmailParams, Recipient, Sender } from 'mailersend';
 import fs from 'fs';
 
-// Configure MailerSend client
-const mailerSend = new MailerSend({
-  apiKey: process.env.MAILERSEND_API_KEY || '',
-});
+  // Configure MailerSend client
+  const mailerSend = new MailerSend({
+    apiKey: process.env.MAILERSEND_API_KEY || '',
+  });
 
 const defaultFromEmail = process.env.MAIL_FROM_EMAIL || process.env.SMTP_FROM || process.env.EMAIL_USER || 'noreply@zarvo.com';
 const defaultFromName = process.env.MAIL_FROM_NAME || 'Zarvo Healthcare';
-
 export async function sendEmail(to: string, subject: string, html: string, text?: string) {
   try {
     if (!process.env.MAILERSEND_API_KEY) throw new Error('MAILERSEND_API_KEY is not set');
@@ -31,11 +30,12 @@ export async function sendEmailWithAttachments(to: string, subject: string, html
   try {
     if (!process.env.MAILERSEND_API_KEY) throw new Error('MAILERSEND_API_KEY is not set');
 
-    const atts: Attachment[] = attachments.map((a) => {
+    const atts = attachments.map((a) => {
       const content = fs.readFileSync(a.path);
-      return new Attachment()
-        .setFilename(a.filename)
-        .setContent(content.toString('base64'));
+      return {
+        filename: a.filename,
+        content: content.toString('base64'),
+      } as any;
     });
 
     const params = new EmailParams()
