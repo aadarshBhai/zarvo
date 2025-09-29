@@ -7,7 +7,7 @@ import Doctor from "../models/Doctor";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
-import { sendPasswordResetEmail } from "../services/emailService";
+import { sendPasswordResetEmail, sendOtpEmail } from "../services/emailService";
 import { getIO } from "../socket";
 
 const generateToken = (userId: string, role: string) =>
@@ -51,19 +51,10 @@ export const signup = async (req: Request, res: Response) => {
       await user.save();
 
       try {
-        const transporter = nodemailer.createTransport({
-          service: "gmail",
-          auth: {
-            user: process.env.EMAIL_USER!,
-            pass: process.env.EMAIL_PASS!,
-          },
-        });
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER!,
-          to: user.email,
-          subject: "Verify your email",
-          html: `<p>Your verification code is <b>${otp}</b>. It expires in 15 minutes.</p>`
-        });
+        const resSend = await sendOtpEmail(user.email, otp, 'Verify your email');
+        if (!resSend.success) {
+          console.error('Failed to send verification email', resSend.error);
+        }
       } catch (e) {
         console.error("Failed to send verification email", e);
       }
@@ -186,16 +177,11 @@ export const resendOtp = async (req: Request, res: Response) => {
     (user as any).emailVerificationExpiry = new Date(Date.now() + 15 * 60 * 1000);
     await user.save();
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: process.env.EMAIL_USER!, pass: process.env.EMAIL_PASS! },
-    });
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER!,
-      to: user.email,
-      subject: "Your OTP code",
-      html: `<p>Your verification code is <b>${otp}</b>. It expires in 15 minutes.</p>`,
-    });
+    const sendRes = await sendOtpEmail(user.email, otp, 'Email Verification');
+    if (!sendRes.success) {
+      console.error('resendOtp: failed to send OTP', sendRes.error);
+      return res.status(500).json({ message: "Failed to send OTP email" });
+    }
     return res.status(200).json({ message: "OTP sent" });
   } catch (e) {
     console.error("resendOtp error:", e);

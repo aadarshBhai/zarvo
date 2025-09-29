@@ -42,6 +42,30 @@ export const createTransporter = () => {
   } as any);
 };
 
+// Send OTP email (for signup verification / resend)
+export const sendOtpEmail = async (to: string, otp: string, purpose: string = 'Email Verification') => {
+  try {
+    const transporter = createTransporter();
+    const fromAddr = process.env.SMTP_FROM || process.env.EMAIL_USER || 'noreply@zarvo.com';
+    const result = await transporter.sendMail({
+      from: `Zarvo <${fromAddr}>`,
+      to,
+      subject: `${purpose} - Your OTP Code`,
+      html: `<p>Your verification code is <b>${otp}</b>. It expires in 15 minutes.</p>`,
+    });
+    console.log('✅ OTP email sent successfully:', result.messageId);
+    return { success: true, messageId: result.messageId };
+  } catch (error) {
+    console.error('❌ Error sending OTP email:', {
+      error,
+      hint: 'Check SMTP connectivity and credentials',
+      usingHost: Boolean(process.env.SMTP_HOST),
+      service: process.env.EMAIL_SERVICE || 'gmail',
+    });
+    return { success: false, error };
+  }
+};
+
 // Notify doctor/provider about a customer cancellation
 export const notifyDoctorCancellation = async (booking: any, slot: any) => {
   try {
@@ -290,4 +314,5 @@ export default {
   sendBookingCancellation,
   notifyDoctorCancellation,
   sendPasswordResetEmail,
+  sendOtpEmail,
 };

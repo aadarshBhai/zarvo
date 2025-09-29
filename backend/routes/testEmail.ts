@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sendBookingConfirmation } from '../services/emailService';
+import { sendBookingConfirmation, createTransporter } from '../services/emailService';
 
 const router = Router();
 
@@ -44,6 +44,17 @@ router.post('/test-email', async (req, res) => {
       message: 'Error sending test email',
       error: error 
     });
+  }
+});
+
+// SMTP health check
+router.get('/smtp-health', async (_req, res) => {
+  try {
+    const transporter = createTransporter();
+    const ok = await transporter.verify();
+    res.json({ success: ok === true, usingHost: Boolean(process.env.SMTP_HOST), service: process.env.EMAIL_SERVICE || 'gmail' });
+  } catch (error) {
+    res.status(500).json({ success: false, error, usingHost: Boolean(process.env.SMTP_HOST), service: process.env.EMAIL_SERVICE || 'gmail' });
   }
 });
 
