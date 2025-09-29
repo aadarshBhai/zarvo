@@ -2,7 +2,6 @@
   "name": "zarvo-backend",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "main": "dist/server.js",
   "engines": {
     "node": ">=18"
