@@ -6,7 +6,6 @@ import { Ticket } from "../models/Ticket";
 import Doctor from "../models/Doctor";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
 import { sendPasswordResetEmail, sendOtpEmail } from "../services/emailService";
 import { getIO } from "../socket";
 

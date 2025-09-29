@@ -7,8 +7,7 @@ import Doctor from "../models/Doctor"; // Correct casing
 import { getIO } from "../socket";
 import crypto from "crypto";
 import pdfkit from "pdfkit";
-import nodemailer from "nodemailer";
-import { createTransporter } from "../services/emailService";
+import { sendEmailWithAttachments } from "../services/emailService";
 import fs from "fs";
 import path from "path";
 
@@ -197,27 +196,18 @@ const bookSlot = async (req: Request, res: Response) => {
       writeStream.on("error", (err) => reject(err));
     });
 
-    const transporter = createTransporter();
-
-    // Fire-and-forget email to customer; do not block booking success on mail delivery
-    (async () => {
-      try {
-        const info = await transporter.sendMail({
-          from: process.env.SMTP_FROM || process.env.EMAIL_USER,
-          to: customerEmail,
-          subject: `Your Booking Ticket - ${bookingNumber}`,
-          text: `Dear ${customerName},\n\nYour booking is confirmed. Please find the attached ticket.`,
-          attachments: [{ filename: `${bookingNumber}.pdf`, path: pdfPath }],
-        });
-        console.log("✅ Booking email to customer sent:", info.messageId);
-      } catch (e) {
-        console.error("❌ Failed to send booking email to customer:", {
-          error: e,
-          usingHost: Boolean(process.env.SMTP_HOST),
-          service: process.env.EMAIL_SERVICE || 'gmail',
-        });
-      }
-    })();
+    // Email to customer with PDF (best-effort)
+    try {
+      await sendEmailWithAttachments(
+        customerEmail,
+        `Your Booking Ticket - ${bookingNumber}`,
+        `Dear ${customerName},<br/><br/>Your booking is confirmed. Please find the attached ticket.`,
+        [{ filename: `${bookingNumber}.pdf`, path: pdfPath }]
+      );
+      console.log("✅ Booking email to customer queued");
+    } catch (e) {
+      console.error("❌ Failed to queue booking email to customer:", e);
+    }
 
     // Notify the doctor/business owner directly (if we have an email)
     try {
@@ -229,40 +219,34 @@ const bookSlot = async (req: Request, res: Response) => {
         } catch {}
       }
       if (doctorEmail) {
-        (async () => {
-          try {
-            const info = await transporter.sendMail({
-              from: process.env.SMTP_FROM || process.env.EMAIL_USER,
-              to: doctorEmail,
-              subject: `New Booking Received - ${bookingNumber}`,
-              text: `Dear ${slot.doctor.name || "Doctor"},\n\nA new booking has been made.\n\nBooking Number: ${bookingNumber}\nCustomer: ${customerName}\nEmail: ${customerEmail}\nPhone: ${customerPhone}\nDate & Time: ${slot.date} ${slot.time}\nDepartment: ${slot.department}\n`,
-              attachments: [{ filename: `${bookingNumber}.pdf`, path: pdfPath }],
-            });
-            console.log("✅ Booking email to doctor sent:", info.messageId);
-          } catch (e) {
-            console.warn('Failed to notify doctor via email:', e);
-          }
-        })();
+        try {
+          await sendEmailWithAttachments(
+            doctorEmail,
+            `New Booking Received - ${bookingNumber}`,
+            `Dear ${slot.doctor.name || "Doctor"},<br/><br/>A new booking has been made.<br/><br/>Booking Number: ${bookingNumber}<br/>Customer: ${customerName}<br/>Email: ${customerEmail}<br/>Phone: ${customerPhone}<br/>Date & Time: ${slot.date} ${slot.time}<br/>Department: ${slot.department}<br/>`,
+            [{ filename: `${bookingNumber}.pdf`, path: pdfPath }]
+          );
+          console.log("✅ Booking email to doctor queued");
+        } catch (e) {
+          console.warn('Failed to notify doctor via email:', e);
+        }
       }
     } catch (e) {
       console.warn('Failed to notify doctor via email:', e);
     }
 
     if (process.env.BUSINESS_EMAIL) {
-      (async () => {
-        try {
-          const info = await transporter.sendMail({
-            from: process.env.SMTP_FROM || process.env.EMAIL_USER,
-            to: process.env.BUSINESS_EMAIL,
-            subject: `New Booking Received - ${bookingNumber}`,
-            text: `Dear ${slot.doctor.name || "Doctor"},\n\nA new booking has been made.\n\nBooking Number: ${bookingNumber}\nCustomer: ${customerName}\nEmail: ${customerEmail}\nPhone: ${customerPhone}\nDate & Time: ${slot.date} ${slot.time}\nDepartment: ${slot.department}\n`,
-            attachments: [{ filename: `${bookingNumber}.pdf`, path: pdfPath }],
-          });
-          console.log("✅ Booking email to business sent:", info.messageId);
-        } catch (e) {
-          console.warn("Failed to notify business via email:", e);
-        }
-      })();
+      try {
+        await sendEmailWithAttachments(
+          process.env.BUSINESS_EMAIL,
+          `New Booking Received - ${bookingNumber}`,
+          `Dear ${slot.doctor.name || "Doctor"},<br/><br/>A new booking has been made.<br/><br/>Booking Number: ${bookingNumber}<br/>Customer: ${customerName}<br/>Email: ${customerEmail}<br/>Phone: ${customerPhone}<br/>Date & Time: ${slot.date} ${slot.time}<br/>Department: ${slot.department}<br/>`,
+          [{ filename: `${bookingNumber}.pdf`, path: pdfPath }]
+        );
+        console.log("✅ Booking email to business queued");
+      } catch (e) {
+        console.warn("Failed to notify business via email:", e);
+      }
     } else {
       console.warn("No BUSINESS_EMAIL found in .env for notification.");
     }

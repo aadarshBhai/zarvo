@@ -1,24 +1,7 @@
-import nodemailer from "nodemailer";
-import { createTransporter } from "../services/emailService";
-
-export async function sendEmail({ to, subject, text }: { to: string; subject: string; text: string }) {
-  const transporter = createTransporter();
-
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to,
-    subject,
-    text,
-  };
-
-  try {
-    return await transporter.sendMail(mailOptions);
-  } catch (e) {
-    console.error("sendEmail failed:", {
-      error: e,
-      usingHost: Boolean(process.env.SMTP_HOST),
-      service: process.env.EMAIL_SERVICE || 'gmail',
-    });
-    throw e;
-  }
+// DEPRECATED: Do not use Nodemailer. The project now sends emails via MailerSend API in `backend/services/emailService.ts`.
+// This file is kept to avoid import errors from older code but will throw if called.
+export async function sendEmail(_args: { to: string; subject: string; text: string }) {
+  const msg = "Deprecated sendEmail(utils): use services/emailService.ts (sendEmail/sendPasswordResetEmail/etc.). Nodemailer is disabled.";
+  console.error(msg);
+  throw new Error(msg);
 }

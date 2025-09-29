@@ -1,67 +1,71 @@
-import nodemailer from 'nodemailer';
+import { MailerSend, EmailParams, Recipient, Sender, Attachment } from 'mailersend';
+import fs from 'fs';
 
-// Email configuration
-export const createTransporter = () => {
-  const {
-    SMTP_HOST,
-    SMTP_PORT,
-    SMTP_SECURE,
-    SMTP_USER,
-    SMTP_PASS,
-    EMAIL_SERVICE,
-    EMAIL_USER,
-    EMAIL_PASS,
-  } = process.env as Record<string, string | undefined>;
+// Configure MailerSend client
+const mailerSend = new MailerSend({
+  apiKey: process.env.MAILERSEND_API_KEY || '',
+});
 
-  // Prefer explicit SMTP host/port if provided
-  if (SMTP_HOST) {
-    const port = Number(SMTP_PORT || 587);
-    const secure = String(SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
-    return nodemailer.createTransport({
-      host: SMTP_HOST,
-      port,
-      secure,
-      auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-      pool: true,
-      connectionTimeout: 10000,
-      socketTimeout: 10000,
-    } as any);
+const defaultFromEmail = process.env.MAIL_FROM_EMAIL || process.env.SMTP_FROM || process.env.EMAIL_USER || 'noreply@zarvo.com';
+const defaultFromName = process.env.MAIL_FROM_NAME || 'Zarvo Healthcare';
+
+export async function sendEmail(to: string, subject: string, html: string, text?: string) {
+  try {
+    if (!process.env.MAILERSEND_API_KEY) throw new Error('MAILERSEND_API_KEY is not set');
+    const params = new EmailParams()
+      .setFrom(new Sender(defaultFromEmail, defaultFromName))
+      .setTo([new Recipient(to)])
+      .setSubject(subject)
+      .setHtml(html)
+      .setText(text || html.replace(/<[^>]+>/g, ' '));
+    const res = await mailerSend.email.send(params as any);
+    console.log('✅ MailerSend email queued:', subject, '->', to);
+    return { success: true, data: res };
+  } catch (error) {
+    console.error('❌ MailerSend sendEmail error:', error);
+    return { success: false, error };
   }
+}
 
-  // Otherwise fall back to a known service (default to gmail)
-  const service = EMAIL_SERVICE || 'gmail';
-  return nodemailer.createTransport({
-    service,
-    auth: {
-      user: EMAIL_USER || SMTP_USER || 'your-email@gmail.com',
-      pass: EMAIL_PASS || SMTP_PASS || 'your-app-password',
-    },
-    pool: true,
-    connectionTimeout: 10000,
-    socketTimeout: 10000,
-  } as any);
-};
+export async function sendEmailWithAttachments(to: string, subject: string, html: string, attachments: { path: string; filename: string; }[]) {
+  try {
+    if (!process.env.MAILERSEND_API_KEY) throw new Error('MAILERSEND_API_KEY is not set');
+
+    const atts: Attachment[] = attachments.map((a) => {
+      const content = fs.readFileSync(a.path);
+      return new Attachment()
+        .setFilename(a.filename)
+        .setContent(content.toString('base64'));
+    });
+
+    const params = new EmailParams()
+      .setFrom(new Sender(defaultFromEmail, defaultFromName))
+      .setTo([new Recipient(to)])
+      .setSubject(subject)
+      .setHtml(html)
+      .setText(html.replace(/<[^>]+>/g, ' '))
+      .setAttachments(atts as any);
+
+    const res = await mailerSend.email.send(params as any);
+    console.log('✅ MailerSend email with attachment queued:', subject, '->', to);
+    return { success: true, data: res };
+  } catch (error) {
+    console.error('❌ MailerSend sendEmailWithAttachments error:', error);
+    return { success: false, error };
+  }
+}
 
 // Send OTP email (for signup verification / resend)
 export const sendOtpEmail = async (to: string, otp: string, purpose: string = 'Email Verification') => {
   try {
-    const transporter = createTransporter();
-    const fromAddr = process.env.SMTP_FROM || process.env.EMAIL_USER || 'noreply@zarvo.com';
-    const result = await transporter.sendMail({
-      from: `Zarvo <${fromAddr}>`,
+    const res = await sendEmail(
       to,
-      subject: `${purpose} - Your OTP Code`,
-      html: `<p>Your verification code is <b>${otp}</b>. It expires in 15 minutes.</p>`,
-    });
-    console.log('✅ OTP email sent successfully:', result.messageId);
-    return { success: true, messageId: result.messageId };
+      `${purpose} - Your OTP Code`,
+      `<p>Your verification code is <b>${otp}</b>. It expires in 15 minutes.</p>`
+    );
+    return res;
   } catch (error) {
-    console.error('❌ Error sending OTP email:', {
-      error,
-      hint: 'Check SMTP connectivity and credentials',
-      usingHost: Boolean(process.env.SMTP_HOST),
-      service: process.env.EMAIL_SERVICE || 'gmail',
-    });
+    console.error('❌ Error sending OTP email:', error);
     return { success: false, error };
   }
 };
@@ -69,19 +73,16 @@ export const sendOtpEmail = async (to: string, otp: string, purpose: string = 'E
 // Notify doctor/provider about a customer cancellation
 export const notifyDoctorCancellation = async (booking: any, slot: any) => {
   try {
-    const transporter = createTransporter();
-
     const to = slot?.doctor?.email || slot?.doctor?.contactEmail;
     if (!to) {
       // No doctor email available, skip silently
       return { success: false, error: 'No doctor email available' };
     }
 
-    const mailOptions = {
-      from: `"Zarvo Healthcare" <${process.env.EMAIL_USER || 'noreply@zarvo.com'}>`,
+    const res = await sendEmail(
       to,
-      subject: `🛑 Patient Cancelled - Ticket #${booking.bookingNumber}`,
-      html: `
+      `🛑 Patient Cancelled - Ticket #${booking.bookingNumber}`,
+      `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: #dc3545;">Appointment Cancelled by Patient</h2>
           <p>Dear ${slot?.doctor?.name || 'Provider'},</p>
@@ -94,19 +95,11 @@ export const notifyDoctorCancellation = async (booking: any, slot: any) => {
           <p style="color:#555; font-size:14px;">You may wish to free up this slot for other patients if not already done.</p>
           <p>Regards,<br/>Zarvo</p>
         </div>
-      `,
-    } as any;
-
-    const result = await transporter.sendMail(mailOptions);
-    console.log('✅ Doctor cancellation email sent successfully:', result.messageId);
-    return { success: true, messageId: result.messageId };
+      `
+    );
+    return res;
   } catch (error) {
-    console.error('❌ Error sending doctor cancellation email:', {
-      error,
-      hint: 'Check SMTP connectivity and credentials',
-      usingHost: Boolean(process.env.SMTP_HOST),
-      service: process.env.EMAIL_SERVICE || 'gmail',
-    });
+    console.error('❌ Error sending doctor cancellation email:', error);
     return { success: false, error };
   }
 };
@@ -227,40 +220,25 @@ const createBookingEmailTemplate = (booking: any) => {
 // Send booking confirmation email
 export const sendBookingConfirmation = async (booking: any) => {
   try {
-    const transporter = createTransporter();
-    
-    const mailOptions = {
-      from: `"Zarvo Healthcare" <${process.env.EMAIL_USER || 'noreply@zarvo.com'}>`,
-      to: booking.customerEmail,
-      subject: `🎫 Booking Confirmation - Ticket #${booking.bookingNumber}`,
-      html: createBookingEmailTemplate(booking),
-      attachments: [] // We can add QR code as attachment later
-    };
-
-    const result = await transporter.sendMail(mailOptions);
-    console.log('✅ Booking confirmation email sent successfully:', result.messageId);
-    return { success: true, messageId: result.messageId };
+    const res = await sendEmail(
+      booking.customerEmail,
+      `🎫 Booking Confirmation - Ticket #${booking.bookingNumber}`,
+      createBookingEmailTemplate(booking)
+    );
+    return res;
   } catch (error) {
-    console.error('❌ Error sending booking confirmation email:', {
-      error,
-      hint: 'Check SMTP connectivity and credentials',
-      usingHost: Boolean(process.env.SMTP_HOST),
-      service: process.env.EMAIL_SERVICE || 'gmail',
-    });
-    return { success: false, error: error };
+    console.error('❌ Error sending booking confirmation email:', error);
+    return { success: false, error };
   }
 };
 
 // Send booking cancellation email
 export const sendBookingCancellation = async (booking: any) => {
   try {
-    const transporter = createTransporter();
-    
-    const mailOptions = {
-      from: `"Zarvo Healthcare" <${process.env.EMAIL_USER || 'noreply@zarvo.com'}>`,
-      to: booking.customerEmail,
-      subject: `❌ Booking Cancelled - Ticket #${booking.bookingNumber}`,
-      html: `
+    const res = await sendEmail(
+      booking.customerEmail,
+      `❌ Booking Cancelled - Ticket #${booking.bookingNumber}`,
+      `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: #dc3545;">Booking Cancelled</h2>
           <p>Dear ${booking.customerName},</p>
@@ -269,42 +247,25 @@ export const sendBookingCancellation = async (booking: any) => {
           <p>Thank you for using Zarvo.</p>
         </div>
       `
-    };
-
-    const result = await transporter.sendMail(mailOptions);
-    console.log('✅ Booking cancellation email sent successfully:', result.messageId);
-    return { success: true, messageId: result.messageId };
+    );
+    return res;
   } catch (error) {
-    console.error('❌ Error sending booking cancellation email:', {
-      error,
-      hint: 'Check SMTP connectivity and credentials',
-      usingHost: Boolean(process.env.SMTP_HOST),
-      service: process.env.EMAIL_SERVICE || 'gmail',
-    });
-    return { success: false, error: error };
+    console.error('❌ Error sending booking cancellation email:', error);
+    return { success: false, error };
   }
 };
 
 // Send password reset email
 export const sendPasswordResetEmail = async (to: string, resetUrl: string) => {
   try {
-    const transporter = createTransporter();
-    const fromAddr = process.env.SMTP_FROM || process.env.EMAIL_USER || 'noreply@zarvo.com';
-    const result = await transporter.sendMail({
-      from: `Zarvo <${fromAddr}>`,
+    const res = await sendEmail(
       to,
-      subject: 'Password Reset',
-      html: `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link valid for 1 hour.</p>`,
-    });
-    console.log('✅ Password reset email sent successfully:', result.messageId);
-    return { success: true, messageId: result.messageId };
+      'Password Reset',
+      `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link valid for 1 hour.</p>`
+    );
+    return res;
   } catch (error) {
-    console.error('❌ Error sending password reset email:', {
-      error,
-      hint: 'Check SMTP connectivity and credentials',
-      usingHost: Boolean(process.env.SMTP_HOST),
-      service: process.env.EMAIL_SERVICE || 'gmail',
-    });
+    console.error('❌ Error sending password reset email:', error);
     return { success: false, error };
   }
 };

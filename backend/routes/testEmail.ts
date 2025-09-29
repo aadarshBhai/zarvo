@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sendBookingConfirmation, createTransporter } from '../services/emailService';
+import { sendBookingConfirmation } from '../services/emailService';
 
 const router = Router();
 
@@ -29,7 +29,7 @@ router.post('/test-email', async (req, res) => {
       res.json({ 
         success: true, 
         message: 'Test email sent successfully!',
-        messageId: result.messageId 
+        providerData: (result as any).data || null
       });
     } else {
       res.status(500).json({ 
@@ -47,14 +47,16 @@ router.post('/test-email', async (req, res) => {
   }
 });
 
-// SMTP health check
+// Email provider health check (MailerSend)
 router.get('/smtp-health', async (_req, res) => {
   try {
-    const transporter = createTransporter();
-    const ok = await transporter.verify();
-    res.json({ success: ok === true, usingHost: Boolean(process.env.SMTP_HOST), service: process.env.EMAIL_SERVICE || 'gmail' });
+    const hasApiKey = Boolean(process.env.MAILERSEND_API_KEY);
+    if (!hasApiKey) {
+      return res.status(500).json({ success: false, provider: 'mailersend', error: 'MAILERSEND_API_KEY is not set' });
+    }
+    return res.json({ success: true, provider: 'mailersend' });
   } catch (error) {
-    res.status(500).json({ success: false, error, usingHost: Boolean(process.env.SMTP_HOST), service: process.env.EMAIL_SERVICE || 'gmail' });
+    res.status(500).json({ success: false, provider: 'mailersend', error });
   }
 });
 
