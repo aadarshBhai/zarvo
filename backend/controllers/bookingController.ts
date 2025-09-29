@@ -3,32 +3,180 @@ import { Booking } from "../models/Booking";  // your Booking model
 import Slot from "../models/slotModel";
 import { sendBookingConfirmation, sendBookingCancellation, notifyDoctorCancellation } from "../services/emailService";
 import { getIO } from "../socket";
+import { Ticket } from "../models/Ticket";
+import crypto from "crypto";
+import pdfkit from "pdfkit";
+import fs from "fs";
+import path from "path";
+import { createTransporter } from "../services/emailService";
 
-// ✅ Create a new booking
+// ✅ Create a new booking (unified flow: book slot + create ticket + PDF + emails)
 export const createBooking = async (req: Request, res: Response) => {
   try {
-    const booking = new Booking(req.body);
-    await booking.save();
-    
-    // Send confirmation email to customer
-    try {
-      const emailResult = await sendBookingConfirmation(booking);
-      if (emailResult.success) {
-        console.log('✅ Booking confirmation email sent successfully');
-      } else {
-        console.log('⚠️ Booking created but email failed to send:', emailResult.error);
-      }
-    } catch (emailError) {
-      console.log('⚠️ Booking created but email failed to send:', emailError);
+    const { slotId, customerName, customerEmail, customerPhone, customerAge, customerGender } = req.body || {};
+
+    if (!slotId || !customerName || !customerEmail || !customerPhone || !customerAge || !customerGender) {
+      return res.status(400).json({ success: false, message: "slotId, customerName, customerEmail, customerPhone, customerAge, customerGender are required" });
     }
-    
+
+    const slot = await Slot.findById(slotId);
+    if (!slot) return res.status(404).json({ success: false, message: "Slot not found" });
+    if (slot.isBooked) return res.status(400).json({ success: false, message: "Slot already booked" });
+
+    const bookingNumber = "ZARVO-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+
+    const booking = await Booking.create({
+      slotId: slot._id,
+      customerName,
+      customerEmail,
+      customerPhone,
+      customerAge,
+      customerGender,
+      doctor: slot.doctor,
+      fee: slot.price,
+      bookingNumber,
+      status: "booked",
+    });
+
+    const ticket = await Ticket.create({
+      bookingId: booking._id,
+      doctorName: slot.doctor.name,
+      doctorLocation: slot.doctor.location,
+      doctorContact: slot.doctor.email || slot.doctor.contactEmail || "N/A",
+      customerName,
+      customerEmail,
+      customerPhone,
+      date: slot.date,
+      time: slot.time,
+      price: slot.price,
+      bookingNumber,
+    } as any);
+
+    // Mark slot booked
+    slot.isBooked = true;
+    await slot.save();
+
+    // Realtime notifications
+    try {
+      const io = getIO();
+      io.emit("slotUpdated", slot);
+      io.emit("bookingCreated", booking);
+      io.emit("ticketCreated", ticket);
+    } catch {}
+
+    // Prepare PDF in a writable location (prefer /tmp on PaaS)
+    const ticketsDir = process.env.TICKETS_DIR || "/tmp/zarvo-tickets";
+    try {
+      if (!fs.existsSync(ticketsDir)) {
+        fs.mkdirSync(ticketsDir, { recursive: true });
+      }
+    } catch (mkErr) {
+      console.warn("Failed to ensure tickets directory, falling back to project path:", mkErr);
+    }
+    const fallbackDir = path.join(__dirname, `../tickets`);
+    const outDir = fs.existsSync(ticketsDir) ? ticketsDir : fallbackDir;
+    if (!fs.existsSync(outDir)) {
+      fs.mkdirSync(outDir, { recursive: true });
+    }
+    const pdfPath = path.join(outDir, `${bookingNumber}.pdf`);
+
+    const doc = new pdfkit();
+    const writeStream = fs.createWriteStream(pdfPath);
+    doc.pipe(writeStream);
+    doc.fontSize(20).text("ZARVO Booking Ticket", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(14).text(`Booking Number: ${bookingNumber}`);
+    doc.text(`Customer: ${customerName}, Age: ${customerAge}, Gender: ${customerGender}`);
+    doc.text(`Email: ${customerEmail}`);
+    doc.text(`Phone: ${customerPhone}`);
+    doc.text(`Doctor: ${slot.doctor.name}`);
+    doc.text(`Department: ${slot.department}`);
+    doc.text(`Date & Time: ${slot.date} ${slot.time}`);
+    doc.text(`Price: ₹${slot.price}`);
+    doc.end();
+
+    await new Promise<void>((resolve, reject) => {
+      writeStream.on("finish", () => resolve());
+      writeStream.on("error", (err) => reject(err));
+    });
+
+    const transporter = createTransporter();
+
+    // Send email to customer (fire-and-forget)
+    (async () => {
+      try {
+        const info = await transporter.sendMail({
+          from: process.env.SMTP_FROM || process.env.EMAIL_USER,
+          to: customerEmail,
+          subject: `Your Booking Ticket - ${bookingNumber}`,
+          text: `Dear ${customerName},\n\nYour booking is confirmed. Please find the attached ticket.`,
+          attachments: [{ filename: `${bookingNumber}.pdf`, path: pdfPath }],
+        });
+        console.log("✅ Booking email to customer sent:", info.messageId);
+      } catch (e) {
+        console.error("❌ Failed to send booking email to customer:", {
+          error: e,
+          usingHost: Boolean(process.env.SMTP_HOST),
+          service: process.env.EMAIL_SERVICE || 'gmail',
+        });
+      }
+    })();
+
+    // Notify doctor/business
+    try {
+      let doctorEmail = slot.doctor.email || slot.doctor.contactEmail || "";
+      if (!doctorEmail && (slot as any).businessId) {
+        try {
+          const { default: User } = await import("../models/User");
+          const provider = await User.findById((slot as any).businessId);
+          if (provider?.email) doctorEmail = provider.email;
+        } catch {}
+      }
+      if (doctorEmail) {
+        (async () => {
+          try {
+            const info = await transporter.sendMail({
+              from: process.env.SMTP_FROM || process.env.EMAIL_USER,
+              to: doctorEmail,
+              subject: `New Booking Received - ${bookingNumber}`,
+              text: `Dear ${slot.doctor.name || "Doctor"},\n\nA new booking has been made.\n\nBooking Number: ${bookingNumber}\nCustomer: ${customerName}\nEmail: ${customerEmail}\nPhone: ${customerPhone}\nDate & Time: ${slot.date} ${slot.time}\nDepartment: ${slot.department}\n`,
+              attachments: [{ filename: `${bookingNumber}.pdf`, path: pdfPath }],
+            });
+            console.log("✅ Booking email to doctor sent:", info.messageId);
+          } catch (e) {
+            console.warn('Failed to notify doctor via email:', e);
+          }
+        })();
+      }
+    } catch (e) {
+      console.warn('Failed to notify doctor via email:', e);
+    }
+
+    if (process.env.BUSINESS_EMAIL) {
+      (async () => {
+        try {
+          const info = await transporter.sendMail({
+            from: process.env.SMTP_FROM || process.env.EMAIL_USER,
+            to: process.env.BUSINESS_EMAIL,
+            subject: `New Booking Received - ${bookingNumber}`,
+            text: `New booking created. Booking Number: ${bookingNumber}\nCustomer: ${customerName}\nEmail: ${customerEmail}\nPhone: ${customerPhone}\nDate & Time: ${slot.date} ${slot.time}\nDepartment: ${slot.department}\n`,
+            attachments: [{ filename: `${bookingNumber}.pdf`, path: pdfPath }],
+          });
+          console.log("✅ Booking email to business sent:", info.messageId);
+        } catch (e) {
+          console.warn("Failed to notify business via email:", e);
+        }
+      })();
+    }
+
     res.status(201).json({
       success: true,
-      message: "Booking created successfully and confirmation email sent",
-      data: booking,
+      message: "Slot booked, ticket created, PDF generated & emails queued",
+      data: { booking, ticket },
     });
   } catch (error: any) {
-    res.status(400).json({ success: false, message: error.message });
+    console.error("Create booking (unified) error:", error);
+    res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };
 
