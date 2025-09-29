@@ -15,6 +15,7 @@ export const createBooking = async (req: Request, res: Response) => {
   try {
     const { slotId, customerName, customerEmail, customerPhone, customerAge, customerGender } = req.body || {};
 
+
     if (!slotId || !customerName || !customerEmail || !customerPhone || !customerAge || !customerGender) {
       return res.status(400).json({ success: false, message: "slotId, customerName, customerEmail, customerPhone, customerAge, customerGender are required" });
     }
@@ -391,5 +392,87 @@ export const deleteBooking = async (req: Request, res: Response) => {
     res.status(200).json({ success: true, message: "Booking deleted successfully and cancellation email sent" });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ✅ Public cancel endpoint: guests cancel using bookingNumber + customerEmail (2-hour cutoff enforced)
+export const cancelBookingPublic = async (req: Request, res: Response) => {
+  try {
+    const { bookingNumber, customerEmail } = req.body || {};
+    if (!bookingNumber || !customerEmail) {
+      return res.status(400).json({ success: false, message: "bookingNumber and customerEmail are required" });
+    }
+
+    const booking = await Booking.findOne({ bookingNumber });
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    if (booking.customerEmail !== customerEmail) {
+      return res.status(403).json({ success: false, message: "Provided email does not match this booking" });
+    }
+
+    const slot = await Slot.findById(booking.slotId);
+    if (!slot) {
+      return res.status(404).json({ success: false, message: "Related slot not found" });
+    }
+
+    const slotStart = new Date(`${slot.date}T${slot.time}:00`);
+    if (isNaN(slotStart.getTime())) {
+      return res.status(400).json({ success: false, message: "Invalid slot date/time" });
+    }
+
+    const now = new Date();
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+    if (now.getTime() > slotStart.getTime() - twoHoursMs) {
+      return res.status(400).json({ success: false, message: "Cancellation is only allowed up to 2 hours before the appointment" });
+    }
+
+    if (booking.status === "cancelled") {
+      return res.status(200).json({ success: true, message: "Booking already cancelled" });
+    }
+
+    booking.status = "cancelled" as any;
+    await booking.save();
+
+    if (slot.isBooked) {
+      slot.isBooked = false;
+      await slot.save();
+    }
+
+    // Send emails (best-effort)
+    try {
+      const emailResult = await sendBookingCancellation(booking);
+      if (emailResult.success) {
+        console.log('✅ Booking cancellation email sent successfully');
+      } else {
+        console.log('⚠️ Cancellation email failed to send:', emailResult.error);
+      }
+    } catch (emailError) {
+      console.log('⚠️ Cancellation email failed to send:', emailError);
+    }
+
+    try {
+      const notifyResult = await notifyDoctorCancellation(booking, slot);
+      if (notifyResult.success) {
+        console.log('✅ Doctor notified about cancellation');
+      } else {
+        console.log('⚠️ Doctor notification not sent:', notifyResult.error);
+      }
+    } catch (notifyErr) {
+      console.log('⚠️ Doctor notification failed:', notifyErr);
+    }
+
+    // Realtime updates
+    try {
+      const io = getIO();
+      io.emit("bookingCancelled", { id: booking.id, slotId: booking.slotId });
+      io.emit("slotUpdated", { id: slot.id, isBooked: slot.isBooked });
+    } catch {}
+
+    return res.status(200).json({ success: true, message: "Booking cancelled" });
+  } catch (error: any) {
+    console.error("Public cancel booking error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };

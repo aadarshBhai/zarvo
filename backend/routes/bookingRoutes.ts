@@ -8,6 +8,7 @@ import {
   updateBooking,
   deleteBooking,
   cancelBooking,
+  cancelBookingPublic,
 } from "../controllers/bookingController";
 import { protect } from "../middleware/authMiddleware";
 
@@ -16,6 +17,10 @@ const router = Router();
 // @route   POST /api/bookings
 // @desc    Create a new booking
 router.post("/", createBooking);
+
+// @route   POST /api/bookings/cancel-public
+// @desc    Public guest cancellation using bookingNumber + customerEmail (2-hour cutoff)
+router.post("/cancel-public", cancelBookingPublic);
 
 // @route   GET /api/bookings
 // @desc    Get all bookings
