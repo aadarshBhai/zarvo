@@ -1,12 +1,15 @@
 {
-  "$schema": "https://json.schemastore.org/package",
   "name": "zarvo",
   "version": "1.0.0",
+  "private": true,
   "main": "backend/dist/server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "dev": "nodemon --ext ts,js,json --watch backend --ignore backend/dist --exec ts-node backend/server.ts",
     "build": "tsc -p backend/tsconfig.json",
-    "start": "node backend/dist/server.js"
+    "start": "node backend/dist/server.js",
+    "dev": "nodemon --ext ts,js,json --watch backend --ignore backend/dist --exec ts-node backend/server.ts"
   },
   "dependencies": {
     "axios": "^1.12.2",
@@ -38,6 +41,7 @@
     "@types/socket.io": "^3.0.1",
     "nodemon": "^3.0.2",
     "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"
   }
 }
