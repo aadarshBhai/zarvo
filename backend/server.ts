@@ -32,6 +32,8 @@ seedAdminUsers();
 
 const app = express();
 const server = http.createServer(app);
+// Early health check endpoint for platform probes
+app.get("/api/health", (_req, res) => res.send("Server is running ✅"));
 
 // Seed admin account (runs once if it does not exist)
 async function seedAdminUsers() {
