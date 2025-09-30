@@ -1,56 +1,69 @@
-import { MailerSend, EmailParams, Recipient, Sender } from 'mailersend';
-import fs from 'fs';
+import nodemailer from 'nodemailer';
 
-  // Configure MailerSend client
-  const mailerSend = new MailerSend({
-    apiKey: process.env.MAILERSEND_API_KEY || '',
-  });
+// Nodemailer transporter configuration (SMTP)
+const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST;
+const smtpPort = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || 587);
+const smtpSecure = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true' || smtpPort === 465;
+const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
 
-const defaultFromEmail = process.env.MAIL_FROM_EMAIL || process.env.SMTP_FROM || process.env.EMAIL_USER || 'noreply@zarvo.com';
+const defaultFromEmail = process.env.MAIL_FROM_EMAIL || process.env.SMTP_FROM || smtpUser || 'noreply@zarvo.com';
 const defaultFromName = process.env.MAIL_FROM_NAME || 'Zarvo Healthcare';
+
+const transporter = nodemailer.createTransport({
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpSecure,
+  auth: smtpUser && smtpPass ? { user: smtpUser, pass: smtpPass } : undefined,
+});
+
 export async function sendEmail(to: string, subject: string, html: string, text?: string) {
   try {
-    if (!process.env.MAILERSEND_API_KEY) throw new Error('MAILERSEND_API_KEY is not set');
-    const params = new EmailParams()
-      .setFrom(new Sender(defaultFromEmail, defaultFromName))
-      .setTo([new Recipient(to)])
-      .setSubject(subject)
-      .setHtml(html)
-      .setText(text || html.replace(/<[^>]+>/g, ' '));
-    const res = await mailerSend.email.send(params as any);
-    console.log('✅ MailerSend email queued:', subject, '->', to);
-    return { success: true, data: res };
+    if (!smtpHost) throw new Error('SMTP_HOST is not set');
+
+    const info = await transporter.sendMail({
+      from: `${defaultFromName} <${defaultFromEmail}>`,
+      to,
+      subject,
+      html,
+      text: text || html.replace(/<[^>]+>/g, ' '),
+    });
+
+    console.log('✅ Email sent:', subject, '->', to, 'id:', info.messageId);
+    return { success: true, data: info };
   } catch (error) {
-    console.error('❌ MailerSend sendEmail error:', error);
+    console.error('❌ sendEmail error:', error);
     return { success: false, error };
   }
 }
 
-export async function sendEmailWithAttachments(to: string, subject: string, html: string, attachments: { path: string; filename: string; }[]) {
+export async function sendEmailWithAttachments(
+  to: string,
+  subject: string,
+  html: string,
+  attachments: { path: string; filename: string }[]
+) {
   try {
-    if (!process.env.MAILERSEND_API_KEY) throw new Error('MAILERSEND_API_KEY is not set');
+    if (!smtpHost) throw new Error('SMTP_HOST is not set');
 
-    const atts = attachments.map((a) => {
-      const content = fs.readFileSync(a.path);
-      return {
-        filename: a.filename,
-        content: content.toString('base64'),
-      } as any;
+    const atts = attachments.map((a) => ({
+      filename: a.filename,
+      path: a.path,
+    }));
+
+    const info = await transporter.sendMail({
+      from: `${defaultFromName} <${defaultFromEmail}>`,
+      to,
+      subject,
+      html,
+      text: html.replace(/<[^>]+>/g, ' '),
+      attachments: atts as any,
     });
 
-    const params = new EmailParams()
-      .setFrom(new Sender(defaultFromEmail, defaultFromName))
-      .setTo([new Recipient(to)])
-      .setSubject(subject)
-      .setHtml(html)
-      .setText(html.replace(/<[^>]+>/g, ' '))
-      .setAttachments(atts as any);
-
-    const res = await mailerSend.email.send(params as any);
-    console.log('✅ MailerSend email with attachment queued:', subject, '->', to);
-    return { success: true, data: res };
+    console.log('✅ Email with attachments sent:', subject, '->', to, 'id:', info.messageId);
+    return { success: true, data: info };
   } catch (error) {
-    console.error('❌ MailerSend sendEmailWithAttachments error:', error);
+    console.error('❌ sendEmailWithAttachments error:', error);
     return { success: false, error };
   }
 }
