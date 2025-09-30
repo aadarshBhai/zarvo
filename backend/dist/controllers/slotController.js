@@ -5,20 +5,46 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteSlot = exports.bookSlot = exports.getBusinessSlots = exports.getSlots = exports.createSlot = void 0;
 const slotModel_1 = __importDefault(require("../models/slotModel"));
+const User_1 = __importDefault(require("../models/User"));
 const Booking_1 = require("../models/Booking");
 const Ticket_1 = require("../models/Ticket");
+const Doctor_1 = __importDefault(require("../models/Doctor")); // Correct casing
 const socket_1 = require("../socket");
 const crypto_1 = __importDefault(require("crypto"));
 const pdfkit_1 = __importDefault(require("pdfkit"));
-const nodemailer_1 = __importDefault(require("nodemailer"));
+const emailService_1 = require("../services/emailService");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 // Create Slot (Doctor / Business)
 const createSlot = async (req, res) => {
     try {
+        // Enforce approval for business/doctor accounts
+        if ((req.user?.role === 'doctor' || req.user?.role === 'business') && req.user?.isApproved !== true) {
+            return res.status(403).json({ message: "Your account is pending approval. You cannot create slots yet." });
+        }
         const { date, time, duration, price, department, doctor } = req.body;
         if (!doctor || !doctor.name || !doctor.location) {
             return res.status(400).json({ message: "Doctor information is required" });
+        }
+        // Ensure a Doctor profile exists for this business so slots appear on public listing
+        try {
+            const bizId = req.user?.id;
+            if (bizId) {
+                const existing = await Doctor_1.default.findOne({ businessId: bizId });
+                if (!existing) {
+                    await Doctor_1.default.create({
+                        name: doctor.name,
+                        rating: typeof doctor.rating === 'number' ? doctor.rating : 0,
+                        location: doctor.location,
+                        department: department || 'General',
+                        businessId: bizId,
+                    });
+                }
+            }
+        }
+        catch (e) {
+            // non-fatal; continue creating slot
+            console.warn('Failed to ensure Doctor profile exists:', e);
         }
         const slot = await slotModel_1.default.create({
             date,
@@ -49,9 +75,21 @@ exports.createSlot = createSlot;
 const getSlots = async (req, res) => {
     try {
         const todayStr = new Date().toISOString().split("T")[0];
+        // Only include slots from approved, active business/doctor accounts
+        const approvedUserIds = await User_1.default.find({
+            role: { $in: ["doctor", "business"] },
+            isApproved: true,
+            isActive: true,
+        }).distinct("_id");
+        const approvedIdStrings = approvedUserIds.map((id) => id.toString());
+        // Further ensure the business/doctor actually has a doctor profile
+        const businessesWithDoctor = await Doctor_1.default.find({}).distinct("businessId");
+        const businessesWithDoctorStrings = businessesWithDoctor.map((id) => id.toString());
+        const eligibleBusinessIds = approvedIdStrings.filter((id) => businessesWithDoctorStrings.includes(id));
         const slots = await slotModel_1.default.find({
             date: { $gte: todayStr },
             isBooked: false,
+            businessId: { $in: eligibleBusinessIds },
         }).sort({ date: 1, time: 1 });
         res.status(200).json(slots);
     }
@@ -64,6 +102,9 @@ exports.getSlots = getSlots;
 // Get business slots (Doctor)
 const getBusinessSlots = async (req, res) => {
     try {
+        if ((req.user?.role === 'doctor' || req.user?.role === 'business') && req.user?.isApproved !== true) {
+            return res.status(403).json({ message: "Your account is pending approval. Please wait for admin approval." });
+        }
         const slots = await slotModel_1.default.find({ businessId: req.user?.id }).sort({ date: 1, time: 1 });
         res.json(slots);
     }
@@ -143,28 +184,46 @@ const bookSlot = async (req, res) => {
             writeStream.on("finish", () => resolve());
             writeStream.on("error", (err) => reject(err));
         });
-        const transporter = nodemailer_1.default.createTransport({
-            service: "gmail",
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
-            },
-        });
-        await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: customerEmail,
-            subject: `Your Booking Ticket - ${bookingNumber}`,
-            text: `Dear ${customerName},\n\nYour booking is confirmed. Please find the attached ticket.`,
-            attachments: [{ filename: `${bookingNumber}.pdf`, path: pdfPath }],
-        });
+        // Email to customer with PDF (best-effort)
+        try {
+            await (0, emailService_1.sendEmailWithAttachments)(customerEmail, `Your Booking Ticket - ${bookingNumber}`, `Dear ${customerName},<br/><br/>Your booking is confirmed. Please find the attached ticket.`, [{ filename: `${bookingNumber}.pdf`, path: pdfPath }]);
+            console.log("✅ Booking email to customer queued");
+        }
+        catch (e) {
+            console.error("❌ Failed to queue booking email to customer:", e);
+        }
+        // Notify the doctor/business owner directly (if we have an email)
+        try {
+            let doctorEmail = slot.doctor.email || slot.doctor.contactEmail || "";
+            if (!doctorEmail && slot.businessId) {
+                try {
+                    const provider = await User_1.default.findById(slot.businessId);
+                    if (provider?.email)
+                        doctorEmail = provider.email;
+                }
+                catch { }
+            }
+            if (doctorEmail) {
+                try {
+                    await (0, emailService_1.sendEmailWithAttachments)(doctorEmail, `New Booking Received - ${bookingNumber}`, `Dear ${slot.doctor.name || "Doctor"},<br/><br/>A new booking has been made.<br/><br/>Booking Number: ${bookingNumber}<br/>Customer: ${customerName}<br/>Email: ${customerEmail}<br/>Phone: ${customerPhone}<br/>Date & Time: ${slot.date} ${slot.time}<br/>Department: ${slot.department}<br/>`, [{ filename: `${bookingNumber}.pdf`, path: pdfPath }]);
+                    console.log("✅ Booking email to doctor queued");
+                }
+                catch (e) {
+                    console.warn('Failed to notify doctor via email:', e);
+                }
+            }
+        }
+        catch (e) {
+            console.warn('Failed to notify doctor via email:', e);
+        }
         if (process.env.BUSINESS_EMAIL) {
-            await transporter.sendMail({
-                from: process.env.EMAIL_USER,
-                to: process.env.BUSINESS_EMAIL,
-                subject: `New Booking Received - ${bookingNumber}`,
-                text: `Dear ${slot.doctor.name || "Doctor"},\n\nA new booking has been made.\n\nBooking Number: ${bookingNumber}\nCustomer: ${customerName}\nEmail: ${customerEmail}\nPhone: ${customerPhone}\nDate & Time: ${slot.date} ${slot.time}\nDepartment: ${slot.department}\n`,
-                attachments: [{ filename: `${bookingNumber}.pdf`, path: pdfPath }],
-            });
+            try {
+                await (0, emailService_1.sendEmailWithAttachments)(process.env.BUSINESS_EMAIL, `New Booking Received - ${bookingNumber}`, `Dear ${slot.doctor.name || "Doctor"},<br/><br/>A new booking has been made.<br/><br/>Booking Number: ${bookingNumber}<br/>Customer: ${customerName}<br/>Email: ${customerEmail}<br/>Phone: ${customerPhone}<br/>Date & Time: ${slot.date} ${slot.time}<br/>Department: ${slot.department}<br/>`, [{ filename: `${bookingNumber}.pdf`, path: pdfPath }]);
+                console.log("✅ Booking email to business queued");
+            }
+            catch (e) {
+                console.warn("Failed to notify business via email:", e);
+            }
         }
         else {
             console.warn("No BUSINESS_EMAIL found in .env for notification.");
@@ -180,6 +239,9 @@ exports.bookSlot = bookSlot;
 // Delete slot (Business/Doctor)
 const deleteSlot = async (req, res) => {
     try {
+        if ((req.user?.role === 'doctor' || req.user?.role === 'business') && req.user?.isApproved !== true) {
+            return res.status(403).json({ message: "Your account is pending approval. You cannot delete slots yet." });
+        }
         const { slotId } = req.params;
         const force = req.query.force === 'true';
         const slot = await slotModel_1.default.findOne({ _id: slotId, businessId: req.user?.id });

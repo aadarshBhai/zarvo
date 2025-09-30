@@ -18,8 +18,10 @@ const bookingRoutes_1 = __importDefault(require("./routes/bookingRoutes"));
 const slotRoutes_1 = __importDefault(require("./routes/slotRoutes"));
 const testEmail_1 = __importDefault(require("./routes/testEmail"));
 const adminRoutes_1 = __importDefault(require("./routes/adminRoutes"));
-// Seed super-admin and admin users at startup
+const ratingRoutes_1 = __importDefault(require("./routes/ratingRoutes"));
+// Load env from both root .env (ts-node dev) and backend/.env (built dist)
 dotenv_1.default.config({ path: path_1.default.resolve(__dirname, "../.env") });
+dotenv_1.default.config({ path: path_1.default.resolve(__dirname, ".env") });
 // Confirm environment variables
 console.log("PORT:", process.env.PORT || 5000);
 console.log("FRONTEND_URLS:", process.env.FRONTEND_URLS || process.env.FRONTEND_URL);
@@ -30,25 +32,11 @@ console.log("DB URI exists?", !!(process.env.MONGO_URI || process.env.MONGODB_UR
 seedAdminUsers();
 const app = (0, express_1.default)();
 const server = http_1.default.createServer(app);
-// Seed super-admin and admin accounts (runs once if they do not exist)
+// Seed admin account (runs once if it does not exist)
 async function seedAdminUsers() {
     try {
-        const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || "zarvosuperadmin@gmail.com";
-        const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || "Aa1#Aa1#";
         const adminEmail = process.env.ADMIN_EMAIL || "zarvoadmin@gmail.com";
         const adminPassword = process.env.ADMIN_PASSWORD || "Aa1#Aa1#";
-        // Super Admin
-        let superAdmin = await User_1.default.findOne({ email: superAdminEmail });
-        if (!superAdmin) {
-            superAdmin = await User_1.default.create({
-                name: "Super Admin",
-                email: superAdminEmail,
-                password: superAdminPassword,
-                role: "super-admin",
-            });
-            console.log("✅ Seeded super-admin:", superAdminEmail);
-        }
-        // Admin
         let admin = await User_1.default.findOne({ email: adminEmail });
         if (!admin) {
             admin = await User_1.default.create({
@@ -59,6 +47,11 @@ async function seedAdminUsers() {
             });
             console.log("✅ Seeded admin:", adminEmail);
         }
+        else if (process.env.NODE_ENV !== "production") {
+            admin.password = adminPassword;
+            await admin.save();
+            console.log("🔐 Updated admin password (dev mode)");
+        }
     }
     catch (err) {
         console.error("⚠️ Admin seeding failed:", err);
@@ -67,18 +60,41 @@ async function seedAdminUsers() {
 // Allowed origins for CORS/Socket.IO
 const envOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "")
     .split(",")
-    .map(o => o.trim())
+    .map((o) => o.trim())
     .filter(Boolean);
-const isProd = process.env.NODE_ENV === 'production';
+const isProd = process.env.NODE_ENV === "production";
 const devDefaults = [
-    'http://localhost:5000',
-    'http://127.0.0.1:5000',
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:8080',
-    'http://127.0.0.1:8080',
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
 ];
-const allowedOrigins = [...new Set(envOrigins.length > 0 ? (isProd ? envOrigins : [...envOrigins, ...devDefaults]) : (isProd ? [] : devDefaults))];
+const baseAllowed = [
+    ...new Set(envOrigins.length > 0
+        ? isProd
+            ? envOrigins
+            : [...envOrigins, ...devDefaults]
+        : isProd
+            ? []
+            : devDefaults),
+];
+// In development, also allow private LAN IPs commonly used by Vite/React dev servers
+if (!isProd) {
+    const privateLan5173 = [
+        /^http:\/\/10\.(?:\d{1,3}\.){2}\d{1,3}:5173$/,
+        /^http:\/\/192\.168\.(?:\d{1,3})\.\d{1,3}:5173$/,
+        /^http:\/\/172\.(?:1[6-9]|2\d|3[0-1])\.(?:\d{1,3})\.\d{1,3}:5173$/,
+    ];
+    const privateLan8080 = [
+        /^http:\/\/10\.(?:\d{1,3}\.){2}\d{1,3}:8080$/,
+        /^http:\/\/192\.168\.(?:\d{1,3})\.\d{1,3}:8080$/,
+        /^http:\/\/172\.(?:1[6-9]|2\d|3[0-1])\.(?:\d{1,3})\.\d{1,3}:8080$/,
+    ];
+    baseAllowed.push(...privateLan5173, ...privateLan8080);
+}
+const allowedOrigins = baseAllowed;
 // Socket.IO initialization
 (0, socket_1.initIO)(server, allowedOrigins);
 // Middleware
@@ -90,10 +106,10 @@ app.use("/api/bookings", bookingRoutes_1.default);
 app.use("/api/slots", slotRoutes_1.default);
 app.use("/api/test", testEmail_1.default);
 app.use("/api/admin", adminRoutes_1.default);
+app.use("/api/ratings", ratingRoutes_1.default);
 // Health check endpoint
 app.get("/health", (_req, res) => res.send("Server is running ✅"));
 // Serve frontend
-// Adjust path for Render: backend/dist -> ../../frontend/dist
 const frontendDist = path_1.default.resolve(__dirname, "../../frontend/dist");
 if (fs_1.default.existsSync(path_1.default.join(frontendDist, "index.html"))) {
     console.log("Serving frontend from:", frontendDist);
@@ -109,7 +125,8 @@ else {
 // Self-ping to prevent cold start (optional)
 if (process.env.SELF_URL) {
     setInterval(() => {
-        axios_1.default.get(process.env.SELF_URL)
+        axios_1.default
+            .get(process.env.SELF_URL)
             .then(() => console.log("✅ Self-ping successful"))
             .catch(() => console.log("⚠️ Self-ping failed"));
     }, 5 * 60 * 1000);

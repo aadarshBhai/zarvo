@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isSuperAdmin = exports.isAdmin = exports.protect = void 0;
+exports.isAdmin = exports.protect = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const User_1 = __importDefault(require("../models/User"));
@@ -32,15 +32,8 @@ const protect = async (req, res, next) => {
 exports.protect = protect;
 const isAdmin = (req, res, next) => {
     const role = req.user?.role;
-    if (role === 'admin' || role === 'super-admin')
+    if (role === 'admin')
         return next();
     return res.status(403).json({ message: 'Admin access required' });
 };
 exports.isAdmin = isAdmin;
-const isSuperAdmin = (req, res, next) => {
-    const role = req.user?.role;
-    if (role === 'super-admin')
-        return next();
-    return res.status(403).json({ message: 'Super-admin access required' });
-};
-exports.isSuperAdmin = isSuperAdmin;

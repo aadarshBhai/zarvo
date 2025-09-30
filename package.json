@@ -33,7 +33,7 @@
     "@types/jsonwebtoken": "^9.0.2",
     "@types/mongoose": "^5.11.97",
     "@types/node": "^24.3.1",
-    "@types/nodemailer": "^7.0.1",
+    "@types/nodemailer": "^7.0.2",
     "@types/pdfkit": "^0.17.3",
     "@types/socket.io": "^3.0.1",
     "nodemon": "^3.0.2",

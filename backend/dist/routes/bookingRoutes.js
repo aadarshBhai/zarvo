@@ -8,6 +8,9 @@ const router = (0, express_1.Router)();
 // @route   POST /api/bookings
 // @desc    Create a new booking
 router.post("/", bookingController_1.createBooking);
+// @route   POST /api/bookings/cancel-public
+// @desc    Public guest cancellation using bookingNumber + customerEmail (2-hour cutoff)
+router.post("/cancel-public", bookingController_1.cancelBookingPublic);
 // @route   GET /api/bookings
 // @desc    Get all bookings
 router.get("/", bookingController_1.getBookings);
@@ -16,7 +19,7 @@ router.get("/", bookingController_1.getBookings);
 router.get("/all", bookingController_1.getBookings);
 // @route   GET /api/bookings/my-bookings
 // @desc    Get bookings for the logged-in doctor/business
-router.get("/my-bookings", bookingController_1.getMyBookings);
+router.get("/my-bookings", authMiddleware_1.protect, bookingController_1.getMyBookings);
 // @route   GET /api/bookings/:id
 // @desc    Get a single booking by ID
 router.get("/:id", bookingController_1.getBookingById);

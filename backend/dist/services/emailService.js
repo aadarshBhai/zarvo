@@ -3,18 +3,109 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendBookingCancellation = exports.sendBookingConfirmation = void 0;
+exports.sendPasswordResetEmail = exports.sendBookingCancellation = exports.sendBookingConfirmation = exports.notifyDoctorCancellation = exports.sendOtpEmail = void 0;
+exports.sendEmail = sendEmail;
+exports.sendEmailWithAttachments = sendEmailWithAttachments;
 const nodemailer_1 = __importDefault(require("nodemailer"));
-// Email configuration
-const createTransporter = () => {
-    return nodemailer_1.default.createTransport({
-        service: 'gmail', // You can use other services like 'outlook', 'yahoo', etc.
-        auth: {
-            user: process.env.EMAIL_USER || 'your-email@gmail.com',
-            pass: process.env.EMAIL_PASS || 'your-app-password'
-        }
-    });
+// Nodemailer transporter configuration (SMTP)
+const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST;
+const smtpPort = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || 587);
+const smtpSecure = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true' || smtpPort === 465;
+const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
+const defaultFromEmail = process.env.MAIL_FROM_EMAIL || process.env.SMTP_FROM || smtpUser || 'noreply@zarvo.com';
+const defaultFromName = process.env.MAIL_FROM_NAME || 'Zarvo Healthcare';
+const transporter = nodemailer_1.default.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    auth: smtpUser && smtpPass ? { user: smtpUser, pass: smtpPass } : undefined,
+});
+async function sendEmail(to, subject, html, text) {
+    try {
+        if (!smtpHost)
+            throw new Error('SMTP_HOST is not set');
+        const info = await transporter.sendMail({
+            from: `${defaultFromName} <${defaultFromEmail}>`,
+            to,
+            subject,
+            html,
+            text: text || html.replace(/<[^>]+>/g, ' '),
+        });
+        console.log('✅ Email sent:', subject, '->', to, 'id:', info.messageId);
+        return { success: true, data: info };
+    }
+    catch (error) {
+        console.error('❌ sendEmail error:', error);
+        return { success: false, error };
+    }
+}
+async function sendEmailWithAttachments(to, subject, html, attachments) {
+    try {
+        if (!smtpHost)
+            throw new Error('SMTP_HOST is not set');
+        const atts = attachments.map((a) => ({
+            filename: a.filename,
+            path: a.path,
+        }));
+        const info = await transporter.sendMail({
+            from: `${defaultFromName} <${defaultFromEmail}>`,
+            to,
+            subject,
+            html,
+            text: html.replace(/<[^>]+>/g, ' '),
+            attachments: atts,
+        });
+        console.log('✅ Email with attachments sent:', subject, '->', to, 'id:', info.messageId);
+        return { success: true, data: info };
+    }
+    catch (error) {
+        console.error('❌ sendEmailWithAttachments error:', error);
+        return { success: false, error };
+    }
+}
+// Send OTP email (for signup verification / resend)
+const sendOtpEmail = async (to, otp, purpose = 'Email Verification') => {
+    try {
+        const res = await sendEmail(to, `${purpose} - Your OTP Code`, `<p>Your verification code is <b>${otp}</b>. It expires in 15 minutes.</p>`);
+        return res;
+    }
+    catch (error) {
+        console.error('❌ Error sending OTP email:', error);
+        return { success: false, error };
+    }
 };
+exports.sendOtpEmail = sendOtpEmail;
+// Notify doctor/provider about a customer cancellation
+const notifyDoctorCancellation = async (booking, slot) => {
+    try {
+        const to = slot?.doctor?.email || slot?.doctor?.contactEmail;
+        if (!to) {
+            // No doctor email available, skip silently
+            return { success: false, error: 'No doctor email available' };
+        }
+        const res = await sendEmail(to, `🛑 Patient Cancelled - Ticket #${booking.bookingNumber}`, `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #dc3545;">Appointment Cancelled by Patient</h2>
+          <p>Dear ${slot?.doctor?.name || 'Provider'},</p>
+          <p>The following booking has been cancelled by the patient.</p>
+          <div style="background:#f8f9fa; padding: 16px; border-radius: 8px; border:1px solid #eee;">
+            <p><strong>Ticket:</strong> ${booking.bookingNumber}</p>
+            <p><strong>Patient:</strong> ${booking.customerName} (${booking.customerEmail}, ${booking.customerPhone})</p>
+            <p><strong>Status:</strong> ${booking.status}</p>
+          </div>
+          <p style="color:#555; font-size:14px;">You may wish to free up this slot for other patients if not already done.</p>
+          <p>Regards,<br/>Zarvo</p>
+        </div>
+      `);
+        return res;
+    }
+    catch (error) {
+        console.error('❌ Error sending doctor cancellation email:', error);
+        return { success: false, error };
+    }
+};
+exports.notifyDoctorCancellation = notifyDoctorCancellation;
 // Email template for booking confirmation
 const createBookingEmailTemplate = (booking) => {
     return `
@@ -130,33 +221,19 @@ const createBookingEmailTemplate = (booking) => {
 // Send booking confirmation email
 const sendBookingConfirmation = async (booking) => {
     try {
-        const transporter = createTransporter();
-        const mailOptions = {
-            from: `"Zarvo Healthcare" <${process.env.EMAIL_USER || 'noreply@zarvo.com'}>`,
-            to: booking.customerEmail,
-            subject: `🎫 Booking Confirmation - Ticket #${booking.bookingNumber}`,
-            html: createBookingEmailTemplate(booking),
-            attachments: [] // We can add QR code as attachment later
-        };
-        const result = await transporter.sendMail(mailOptions);
-        console.log('✅ Booking confirmation email sent successfully:', result.messageId);
-        return { success: true, messageId: result.messageId };
+        const res = await sendEmail(booking.customerEmail, `🎫 Booking Confirmation - Ticket #${booking.bookingNumber}`, createBookingEmailTemplate(booking));
+        return res;
     }
     catch (error) {
         console.error('❌ Error sending booking confirmation email:', error);
-        return { success: false, error: error };
+        return { success: false, error };
     }
 };
 exports.sendBookingConfirmation = sendBookingConfirmation;
 // Send booking cancellation email
 const sendBookingCancellation = async (booking) => {
     try {
-        const transporter = createTransporter();
-        const mailOptions = {
-            from: `"Zarvo Healthcare" <${process.env.EMAIL_USER || 'noreply@zarvo.com'}>`,
-            to: booking.customerEmail,
-            subject: `❌ Booking Cancelled - Ticket #${booking.bookingNumber}`,
-            html: `
+        const res = await sendEmail(booking.customerEmail, `❌ Booking Cancelled - Ticket #${booking.bookingNumber}`, `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: #dc3545;">Booking Cancelled</h2>
           <p>Dear ${booking.customerName},</p>
@@ -164,19 +241,31 @@ const sendBookingCancellation = async (booking) => {
           <p>If you have any questions, please contact us at support@zarvo.com</p>
           <p>Thank you for using Zarvo.</p>
         </div>
-      `
-        };
-        const result = await transporter.sendMail(mailOptions);
-        console.log('✅ Booking cancellation email sent successfully:', result.messageId);
-        return { success: true, messageId: result.messageId };
+      `);
+        return res;
     }
     catch (error) {
         console.error('❌ Error sending booking cancellation email:', error);
-        return { success: false, error: error };
+        return { success: false, error };
     }
 };
 exports.sendBookingCancellation = sendBookingCancellation;
+// Send password reset email
+const sendPasswordResetEmail = async (to, resetUrl) => {
+    try {
+        const res = await sendEmail(to, 'Password Reset', `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link valid for 1 hour.</p>`);
+        return res;
+    }
+    catch (error) {
+        console.error('❌ Error sending password reset email:', error);
+        return { success: false, error };
+    }
+};
+exports.sendPasswordResetEmail = sendPasswordResetEmail;
 exports.default = {
     sendBookingConfirmation: exports.sendBookingConfirmation,
-    sendBookingCancellation: exports.sendBookingCancellation
+    sendBookingCancellation: exports.sendBookingCancellation,
+    notifyDoctorCancellation: exports.notifyDoctorCancellation,
+    sendPasswordResetEmail: exports.sendPasswordResetEmail,
+    sendOtpEmail: exports.sendOtpEmail,
 };

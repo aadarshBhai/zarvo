@@ -42,7 +42,7 @@ const UserSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ["customer", "business", "doctor", "admin", "super-admin"], default: "customer" },
+    role: { type: String, enum: ["customer", "business", "doctor", "admin"], default: "customer" },
     approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" },
     isApproved: { type: Boolean, default: true },
     isActive: { type: Boolean, default: true },
